@@ -5,13 +5,13 @@
   "description": "Production-grade Education Management SaaS backend",
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "scripts": {
     "build": "nest build",
-    "start": "node dist/main",
+    "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/src/main.js",
     "lint": "eslint \"{src,test,prisma}/**/*.ts\"",
     "format": "prettier --write \"{src,test,prisma}/**/*.ts\"",
     "test": "jest",
