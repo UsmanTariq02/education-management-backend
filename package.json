@@ -7,9 +7,6 @@
   "engines": {
     "node": ">=18"
   },
-  "prisma": {
-    "seed": "ts-node --project tsconfig.json prisma/seed.ts"
-  },
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",
