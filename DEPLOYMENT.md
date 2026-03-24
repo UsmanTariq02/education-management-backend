@@ -1,79 +1,157 @@
 # Backend Deployment Guide
 
-This backend is intended to be deployed to Railway with PostgreSQL.
+This backend is prepared for deployment to Render with PostgreSQL.
 
-## Target Platform
+## Current Frontend Deployment
 
-- application hosting: Railway
-- database: Railway PostgreSQL
+The frontend is already live on Vercel:
 
-## Prerequisites
+- `https://education-management-frontend.vercel.app`
 
-- GitHub repo connected to Railway
-- Railway PostgreSQL service created
-- environment variables configured
-
-## Environment Variables
-
-Set these in Railway:
+Use this domain for backend CORS:
 
 ```env
-PORT=3000
-DATABASE_URL=postgresql://...
-JWT_SECRET=replace-with-a-strong-secret
-JWT_REFRESH_SECRET=replace-with-a-strong-refresh-secret
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-SWAGGER_TITLE=Education Management API
-SWAGGER_DESCRIPTION=Production-grade backend for education management SaaS
-SWAGGER_VERSION=1.0.0
-CORS_ORIGIN=https://your-frontend-domain.vercel.app
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=your-email@example.com
-SMTP_PASS=your-app-password
-SMTP_FROM_EMAIL=no-reply@yourdomain.com
-SMTP_FROM_NAME=EduFlow
-WHATSAPP_CALLMEBOT_API_KEY=your-key
+CORS_ORIGIN=https://education-management-frontend.vercel.app
 ```
 
-## Railway Service Settings
+## Recommended Target
 
-Recommended build command:
+- backend hosting: Render Web Service
+- database: Render PostgreSQL
+
+## Render Blueprint
+
+This repository now includes:
+
+- [`render.yaml`](/home/usman/Desktop/project/education-management-backend/render.yaml)
+
+That file defines:
+
+- one Node.js web service
+- one Render PostgreSQL database
+- database connection wiring
+- generated JWT secrets
+- build, migration, and start commands
+
+## How To Deploy On Render
+
+### 1. Open Render
+
+Go to:
+
+- `https://render.com/`
+
+### 2. Create a New Blueprint Service
+
+In Render:
+
+1. click `New`
+2. choose `Blueprint`
+3. connect GitHub if needed
+4. select repo:
+   `UsmanTariq02/education-management-backend`
+5. Render should detect `render.yaml`
+
+### 3. Review The Resources
+
+Render should create:
+
+- web service: `education-management-backend`
+- postgres database: `education-management-postgres`
+
+### 4. Set Secret Environment Variables
+
+The following values are marked `sync: false` in the Blueprint and should be set manually in Render if you need those integrations:
+
+- `SMTP_HOST`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM_EMAIL`
+- `WHATSAPP_CALLMEBOT_API_KEY`
+
+These values are already defined in the Blueprint:
+
+- `PORT`
+- `NODE_ENV`
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `JWT_REFRESH_SECRET`
+- `JWT_EXPIRES_IN`
+- `JWT_REFRESH_EXPIRES_IN`
+- `SWAGGER_TITLE`
+- `SWAGGER_DESCRIPTION`
+- `SWAGGER_VERSION`
+- `CORS_ORIGIN`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_FROM_NAME`
+
+### 5. Deploy
+
+Render will run:
+
+Build:
 
 ```bash
 npm install && npm run prisma:generate && npm run build
 ```
 
-Recommended start command:
+Pre-deploy migration:
 
 ```bash
-npm run prisma:migrate:deploy && npm run start:prod
+npm run prisma:migrate:deploy
 ```
 
-## First-Time Setup
+Start:
 
-After the first successful deploy, open the Railway shell and run:
+```bash
+npm run start:prod
+```
+
+### 6. Seed The Database Once
+
+After the first successful deploy, open the Render Shell for the backend service and run:
 
 ```bash
 npm run prisma:seed
 ```
 
-## Health Checks
+## Production URLs
 
-Useful production endpoints:
+After deployment, your backend URL will look like:
 
-- API health: `/v1/health`
-- Swagger docs: `/docs`
+- `https://education-management-backend.onrender.com`
 
-Example:
+Useful endpoints:
 
-- `https://your-backend.up.railway.app/v1/health`
-- `https://your-backend.up.railway.app/docs`
+- health: `https://your-backend.onrender.com/v1/health`
+- swagger: `https://your-backend.onrender.com/docs`
 
-## Notes
+## Important Notes
 
-- the backend serves versioned routes under `/v1`
-- set `CORS_ORIGIN` to your exact Vercel frontend domain in production
-- use a production-ready PostgreSQL URL from Railway, not the local default from `.env.example`
+- the backend serves API routes under `/v1`
+- the frontend must use the backend URL with `/v1`
+- after Render gives you the final backend URL, update the Vercel frontend env:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://your-backend.onrender.com/v1
+```
+
+Then redeploy the frontend in Vercel.
+
+## Render-Specific Notes
+
+- cold starts may occur on lower plans
+- database migrations are handled by `preDeployCommand`
+- seeding is still a manual one-time step unless you later automate it separately
+
+## If You Want Full Auto-Provisioning
+
+The cleanest path now is:
+
+1. create the Blueprint on Render from `render.yaml`
+2. wait for deploy completion
+3. run `npm run prisma:seed` in Render Shell
+4. copy the Render backend URL
+5. update Vercel `NEXT_PUBLIC_API_BASE_URL`
+6. redeploy frontend
