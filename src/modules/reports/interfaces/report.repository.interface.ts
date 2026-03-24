@@ -83,6 +83,29 @@ export interface UserStatusPoint {
   total: number;
 }
 
+export interface FeeCollectionPeriodSummary {
+  label: string;
+  billed: number;
+  collected: number;
+  pending: number;
+  overdue: number;
+  collectionRate: number;
+}
+
+export interface FeeCollectionOverview {
+  currentMonth: FeeCollectionPeriodSummary;
+  currentQuarter: FeeCollectionPeriodSummary;
+  currentYear: FeeCollectionPeriodSummary;
+}
+
+export interface FeeCollectionComparisonPoint {
+  period: 'MONTH' | 'QUARTER' | 'YEAR';
+  currentCollected: number;
+  previousCollected: number;
+  currentPending: number;
+  previousPending: number;
+}
+
 export interface ReportRepository {
   getDashboardSummary(organizationId?: string): Promise<{
     totalStudents: number;
@@ -106,4 +129,6 @@ export interface ReportRepository {
   getReminderDailyTrend(limit: number, organizationId?: string): Promise<ReminderDailyTrendPoint[]>;
   getUserRoleDistribution(organizationId?: string): Promise<UserRoleDistributionPoint[]>;
   getUserStatusSummary(organizationId?: string): Promise<UserStatusPoint[]>;
+  getFeeCollectionOverview(organizationId?: string): Promise<FeeCollectionOverview>;
+  getFeeCollectionComparison(organizationId?: string): Promise<FeeCollectionComparisonPoint[]>;
 }

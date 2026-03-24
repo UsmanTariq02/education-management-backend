@@ -47,6 +47,14 @@ export class ReportsService {
     return this.reportRepository.getFeeCollectionTrend(6, this.resolveOrganizationId(actor));
   }
 
+  async getFeeCollectionOverview(actor: CurrentUserContext) {
+    return this.reportRepository.getFeeCollectionOverview(this.resolveOrganizationId(actor));
+  }
+
+  async getFeeCollectionComparison(actor: CurrentUserContext) {
+    return this.reportRepository.getFeeCollectionComparison(this.resolveOrganizationId(actor));
+  }
+
   async getBatchCollectionSummary(actor: CurrentUserContext) {
     return this.reportRepository.getBatchCollectionSummary(this.resolveOrganizationId(actor));
   }

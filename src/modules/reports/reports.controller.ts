@@ -67,6 +67,20 @@ export class ReportsController {
     return this.reportsService.getFeeCollectionTrend(actor);
   }
 
+  @Get('fees/collection-overview')
+  @Permissions('reports.read')
+  @ApiOperation({ summary: 'Get fee collection overview for current month, quarter, and year' })
+  async feeCollectionOverview(@CurrentUser() actor: CurrentUserContext) {
+    return this.reportsService.getFeeCollectionOverview(actor);
+  }
+
+  @Get('fees/period-comparison')
+  @Permissions('reports.read')
+  @ApiOperation({ summary: 'Get current vs previous collection and pending comparison for month, quarter, and year' })
+  async feePeriodComparison(@CurrentUser() actor: CurrentUserContext) {
+    return this.reportsService.getFeeCollectionComparison(actor);
+  }
+
   @Get('fees/batch-collection')
   @Permissions('reports.read')
   @ApiOperation({ summary: 'Get batch-wise fee collection summary for charts' })

@@ -7,6 +7,9 @@ import {
   AttendanceDailyTrendPoint,
   BatchCollectionPoint,
   BatchStatusPoint,
+  FeeCollectionComparisonPoint,
+  FeeCollectionOverview,
+  FeeCollectionPeriodSummary,
   FeeCollectionTrendPoint,
   FeeStatusPoint,
   ReminderDailyTrendPoint,
@@ -24,6 +27,84 @@ import {
 @Injectable()
 export class ReportPrismaRepository implements ReportRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  async getFeeCollectionOverview(organizationId?: string): Promise<FeeCollectionOverview> {
+    const now = new Date();
+    const currentMonth = this.getMonthPeriod(now.getFullYear(), now.getMonth() + 1, 'Current Month');
+    const currentQuarter = this.getQuarterPeriod(now, 'Current Quarter');
+    const currentYear = this.getYearPeriod(now.getFullYear(), 'Current Year');
+
+    const [monthSummary, quarterSummary, yearSummary] = await Promise.all([
+      this.summarizeFeePeriod(currentMonth, organizationId),
+      this.summarizeFeePeriod(currentQuarter, organizationId),
+      this.summarizeFeePeriod(currentYear, organizationId),
+    ]);
+
+    return {
+      currentMonth: monthSummary,
+      currentQuarter: quarterSummary,
+      currentYear: yearSummary,
+    };
+  }
+
+  async getFeeCollectionComparison(organizationId?: string): Promise<FeeCollectionComparisonPoint[]> {
+    const now = new Date();
+    const currentMonth = this.getMonthPeriod(now.getFullYear(), now.getMonth() + 1, 'Current Month');
+    const previousMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonth = this.getMonthPeriod(
+      previousMonthDate.getFullYear(),
+      previousMonthDate.getMonth() + 1,
+      'Previous Month',
+    );
+
+    const currentQuarter = this.getQuarterPeriod(now, 'Current Quarter');
+    const previousQuarterStartMonth = currentQuarter.startMonth - 3;
+    const previousQuarterDate = new Date(currentQuarter.year, previousQuarterStartMonth - 1, 1);
+    const previousQuarter = this.getQuarterPeriod(previousQuarterDate, 'Previous Quarter');
+
+    const currentYear = this.getYearPeriod(now.getFullYear(), 'Current Year');
+    const previousYear = this.getYearPeriod(now.getFullYear() - 1, 'Previous Year');
+
+    const [
+      currentMonthSummary,
+      previousMonthSummary,
+      currentQuarterSummary,
+      previousQuarterSummary,
+      currentYearSummary,
+      previousYearSummary,
+    ] = await Promise.all([
+      this.summarizeFeePeriod(currentMonth, organizationId),
+      this.summarizeFeePeriod(previousMonth, organizationId),
+      this.summarizeFeePeriod(currentQuarter, organizationId),
+      this.summarizeFeePeriod(previousQuarter, organizationId),
+      this.summarizeFeePeriod(currentYear, organizationId),
+      this.summarizeFeePeriod(previousYear, organizationId),
+    ]);
+
+    return [
+      {
+        period: 'MONTH',
+        currentCollected: currentMonthSummary.collected,
+        previousCollected: previousMonthSummary.collected,
+        currentPending: currentMonthSummary.pending,
+        previousPending: previousMonthSummary.pending,
+      },
+      {
+        period: 'QUARTER',
+        currentCollected: currentQuarterSummary.collected,
+        previousCollected: previousQuarterSummary.collected,
+        currentPending: currentQuarterSummary.pending,
+        previousPending: previousQuarterSummary.pending,
+      },
+      {
+        period: 'YEAR',
+        currentCollected: currentYearSummary.collected,
+        previousCollected: previousYearSummary.collected,
+        currentPending: currentYearSummary.pending,
+        previousPending: previousYearSummary.pending,
+      },
+    ];
+  }
 
   async getDashboardSummary(organizationId?: string) {
     const now = new Date();
@@ -413,5 +494,101 @@ export class ReportPrismaRepository implements ReportRepository {
       { status: 'ACTIVE', total: active },
       { status: 'INACTIVE', total: inactive },
     ];
+  }
+
+  private getMonthPeriod(year: number, month: number, label: string) {
+    return {
+      label,
+      year,
+      startMonth: month,
+      endMonth: month,
+    };
+  }
+
+  private getQuarterPeriod(date: Date, label: string) {
+    const month = date.getMonth() + 1;
+    const startMonth = Math.floor((month - 1) / 3) * 3 + 1;
+
+    return {
+      label,
+      year: date.getFullYear(),
+      startMonth,
+      endMonth: startMonth + 2,
+    };
+  }
+
+  private getYearPeriod(year: number, label: string) {
+    return {
+      label,
+      year,
+      startMonth: 1,
+      endMonth: 12,
+    };
+  }
+
+  private async summarizeFeePeriod(
+    period: {
+      label: string;
+      year: number;
+      startMonth: number;
+      endMonth: number;
+    },
+    organizationId?: string,
+  ): Promise<FeeCollectionPeriodSummary> {
+    const where = this.buildFeePeriodWhere(period, organizationId);
+    const [aggregate, overdueRows] = await Promise.all([
+      this.prisma.feeRecord.aggregate({
+        _sum: {
+          amountDue: true,
+          amountPaid: true,
+        },
+        where,
+      }),
+      this.prisma.feeRecord.findMany({
+        where: {
+          ...where,
+          status: FeeRecordStatus.OVERDUE,
+        },
+        select: {
+          amountDue: true,
+          amountPaid: true,
+        },
+      }),
+    ]);
+
+    const billed = Number(aggregate._sum.amountDue ?? 0);
+    const collected = Number(aggregate._sum.amountPaid ?? 0);
+    const pending = Math.max(billed - collected, 0);
+    const overdue = overdueRows.reduce(
+      (sum, row) => sum + Math.max(Number(row.amountDue) - Number(row.amountPaid), 0),
+      0,
+    );
+
+    return {
+      label: period.label,
+      billed,
+      collected,
+      pending,
+      overdue,
+      collectionRate: billed > 0 ? Number(((collected / billed) * 100).toFixed(2)) : 0,
+    };
+  }
+
+  private buildFeePeriodWhere(
+    period: {
+      year: number;
+      startMonth: number;
+      endMonth: number;
+    },
+    organizationId?: string,
+  ): Prisma.FeeRecordWhereInput {
+    return {
+      organizationId: organizationId ?? undefined,
+      year: period.year,
+      month: {
+        gte: period.startMonth,
+        lte: period.endMonth,
+      },
+    };
   }
 }
