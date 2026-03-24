@@ -1,0 +1,91 @@
+import { Test } from '@nestjs/testing';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+
+describe('AuthController', () => {
+  let controller: AuthController;
+  let service: jest.Mocked<AuthService>;
+
+  beforeEach(async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [AuthController],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: {
+            login: jest.fn(),
+            refreshTokens: jest.fn(),
+            me: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+
+    controller = moduleRef.get(AuthController);
+    service = moduleRef.get(AuthService);
+  });
+
+  it('login should delegate to service', async () => {
+    const payload = { email: 'admin@edu.local', password: 'ChangeMe123!' };
+    const expected = {
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      user: {
+        id: 'user-1',
+        email: payload.email,
+        firstName: 'Admin',
+        lastName: 'User',
+        roles: ['ADMIN'],
+        permissions: ['users.read'],
+      },
+    };
+
+    service.login.mockResolvedValue(expected);
+
+    await expect(controller.login(payload)).resolves.toEqual(expected);
+    expect(service.login).toHaveBeenCalledWith(payload);
+  });
+
+  it('refresh should delegate to service', async () => {
+    const payload = { refreshToken: 'refresh' };
+    const expected = {
+      accessToken: 'next-access',
+      refreshToken: 'next-refresh',
+      user: {
+        id: 'user-1',
+        email: 'admin@edu.local',
+        firstName: 'Admin',
+        lastName: 'User',
+        roles: ['ADMIN'],
+        permissions: ['users.read'],
+      },
+    };
+
+    service.refreshTokens.mockResolvedValue(expected);
+
+    await expect(controller.refresh(payload)).resolves.toEqual(expected);
+    expect(service.refreshTokens).toHaveBeenCalledWith(payload);
+  });
+
+  it('me should delegate to service', async () => {
+    const actor = {
+      userId: 'user-1',
+      email: 'admin@edu.local',
+      roles: ['ADMIN'],
+      permissions: ['users.read'],
+    };
+    const expected = {
+      id: actor.userId,
+      email: actor.email,
+      firstName: 'Admin',
+      lastName: 'User',
+      roles: actor.roles,
+      permissions: actor.permissions,
+    };
+
+    service.me.mockResolvedValue({ ...expected, isActive: true });
+
+    await expect(controller.me(actor)).resolves.toEqual({ ...expected, isActive: true });
+    expect(service.me).toHaveBeenCalledWith(actor.userId);
+  });
+});

@@ -1,0 +1,8 @@
+-- Intentionally left as a no-op.
+--
+-- The original migration attempted to rename a ReminderSchedule composite index
+-- before ReminderSchedule existed in the migration chain, which breaks shadow
+-- database validation during `prisma migrate dev`.
+--
+-- The correct ReminderSchedule index is created later by
+-- `202603210002_add_reminder_automation`, so no action is required here.

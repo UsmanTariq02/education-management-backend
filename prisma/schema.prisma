@@ -1,0 +1,456 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id          String      @id @default(uuid()) @db.Uuid
+  name        String      @db.VarChar(150)
+  slug        String      @unique @db.VarChar(100)
+  email       String?     @db.VarChar(255)
+  phone       String?     @db.VarChar(30)
+  address     String?     @db.Text
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  users       User[]
+  students    Student[]
+  batches     Batch[]
+  feePlans    FeePlan[]
+  feeRecords  FeeRecord[]
+  attendances Attendance[]
+  reminders   ReminderLog[]
+  reminderTemplates ReminderTemplate[]
+  reminderRules ReminderRule[]
+  reminderSchedules ReminderSchedule[]
+  reminderProviderSetting ReminderProviderSetting?
+  auditLogs   AuditLog[]
+}
+
+enum ReminderAutomationTrigger {
+  FEE_DUE
+  FEE_OVERDUE
+  PAYMENT_RECEIVED
+}
+
+enum ReminderRecipientTarget {
+  STUDENT
+  GUARDIAN
+  BOTH
+}
+
+enum ReminderScheduleStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+  SKIPPED
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  GRADUATED
+}
+
+enum StudentBatchStatus {
+  ACTIVE
+  COMPLETED
+  WITHDRAWN
+}
+
+enum FeeRecordStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
+}
+
+enum ReminderChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+  MANUAL
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  ONLINE
+  CHEQUE
+  OTHER
+}
+
+enum ContactInquiryStatus {
+  NEW
+  REVIEWED
+  CONTACTED
+}
+
+model User {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String?        @db.Uuid
+  firstName      String         @db.VarChar(100)
+  lastName       String         @db.VarChar(100)
+  email          String         @unique @db.VarChar(255)
+  passwordHash   String         @db.VarChar(255)
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  userRoles      UserRole[]
+  refreshTokens  RefreshToken[]
+  sentReminders  ReminderLog[]
+  actorAuditLogs AuditLog[]
+
+  @@index([email, isActive])
+  @@index([organizationId, isActive])
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String           @unique @db.VarChar(100)
+  description     String?          @db.VarChar(255)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String           @unique @db.VarChar(150)
+  description     String?          @db.VarChar(255)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  rolePermissions RolePermission[]
+}
+
+model UserRole {
+  userId     String   @db.Uuid
+  roleId     String   @db.Uuid
+  assignedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  assignedAt   DateTime   @default(now())
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model Student {
+  id            String          @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  firstName     String          @db.VarChar(100)
+  lastName      String          @db.VarChar(100)
+  fullName      String          @db.VarChar(201)
+  email         String?         @db.VarChar(255)
+  phone         String          @db.VarChar(30)
+  guardianName  String          @db.VarChar(120)
+  guardianEmail String?         @db.VarChar(255)
+  guardianPhone String          @db.VarChar(30)
+  address       String?         @db.Text
+  dateOfBirth   DateTime?
+  admissionDate DateTime
+  status        StudentStatus   @default(ACTIVE)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentBatches StudentBatch[]
+  feePlans      FeePlan[]
+  feeRecords    FeeRecord[]
+  attendances   Attendance[]
+  reminderLogs  ReminderLog[]
+  reminderSchedules ReminderSchedule[]
+
+  @@index([fullName])
+  @@index([status])
+  @@index([organizationId, status])
+  @@unique([organizationId, email])
+  @@unique([organizationId, phone])
+}
+
+model Batch {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  name           String         @db.VarChar(120)
+  code           String         @db.VarChar(50)
+  description    String?        @db.Text
+  startDate      DateTime
+  endDate        DateTime?
+  scheduleInfo   String?        @db.Text
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentBatches StudentBatch[]
+  feePlans       FeePlan[]
+  feeRecords     FeeRecord[]
+  attendances    Attendance[]
+
+  @@index([name, isActive])
+  @@index([organizationId, isActive])
+  @@unique([organizationId, code])
+}
+
+model StudentBatch {
+  studentId String             @db.Uuid
+  batchId   String             @db.Uuid
+  joinedAt  DateTime           @default(now())
+  status    StudentBatchStatus @default(ACTIVE)
+  student   Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch     Batch              @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, batchId])
+  @@index([batchId, status])
+}
+
+model FeePlan {
+  id         String      @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  studentId  String      @db.Uuid
+  batchId    String?     @db.Uuid
+  monthlyFee Decimal     @db.Decimal(12, 2)
+  dueDay     Int
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch      Batch?      @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  feeRecords FeeRecord[]
+
+  @@index([studentId, isActive])
+  @@index([batchId])
+  @@index([organizationId, isActive])
+}
+
+model FeeRecord {
+  id            String          @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  studentId     String          @db.Uuid
+  batchId       String?         @db.Uuid
+  feePlanId     String          @db.Uuid
+  month         Int
+  year          Int
+  amountDue     Decimal         @db.Decimal(12, 2)
+  amountPaid    Decimal         @default(0) @db.Decimal(12, 2)
+  status        FeeRecordStatus @default(PENDING)
+  paidAt        DateTime?
+  paymentMethod PaymentMethod?
+  remarks       String?         @db.Text
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student       Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch         Batch?          @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  feePlan       FeePlan         @relation(fields: [feePlanId], references: [id], onDelete: Cascade)
+  reminderLogs  ReminderLog[]
+  reminderSchedules ReminderSchedule[]
+
+  @@unique([studentId, feePlanId, month, year])
+  @@index([status, year, month])
+  @@index([organizationId, status])
+}
+
+model Attendance {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  studentId      String           @db.Uuid
+  batchId        String           @db.Uuid
+  attendanceDate DateTime
+  status         AttendanceStatus
+  remarks        String?          @db.Text
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student        Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch          Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, batchId, attendanceDate])
+  @@index([batchId, attendanceDate])
+  @@index([organizationId, attendanceDate])
+}
+
+model ReminderLog {
+  id           String          @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  studentId    String          @db.Uuid
+  feeRecordId  String?         @db.Uuid
+  channel      ReminderChannel
+  message      String          @db.Text
+  sentByUserId String?         @db.Uuid
+  sentAt       DateTime?
+  status       ReminderStatus  @default(PENDING)
+  deliveryReference String?    @db.VarChar(255)
+  failureReason     String?    @db.Text
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student      Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeRecord    FeeRecord?      @relation(fields: [feeRecordId], references: [id], onDelete: SetNull)
+  sentByUser   User?           @relation(fields: [sentByUserId], references: [id], onDelete: SetNull)
+  reminderSchedule ReminderSchedule?
+
+  @@index([studentId, status])
+  @@index([feeRecordId])
+  @@index([organizationId, status])
+}
+
+model ReminderTemplate {
+  id             String                  @id @default(uuid()) @db.Uuid
+  organizationId String                  @db.Uuid
+  name           String                  @db.VarChar(150)
+  code           String                  @db.VarChar(100)
+  channel        ReminderChannel
+  target         ReminderRecipientTarget @default(GUARDIAN)
+  subject        String?                 @db.VarChar(255)
+  body           String                  @db.Text
+  isActive       Boolean                 @default(true)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rules          ReminderRule[]
+  schedules      ReminderSchedule[]
+
+  @@unique([organizationId, code, channel])
+  @@index([organizationId, isActive])
+}
+
+model ReminderRule {
+  id              String                    @id @default(uuid()) @db.Uuid
+  organizationId  String                    @db.Uuid
+  templateId      String                    @db.Uuid
+  name            String                    @db.VarChar(150)
+  trigger         ReminderAutomationTrigger
+  offsetDays      Int                       @default(0)
+  isActive        Boolean                   @default(true)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  organization    Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  template        ReminderTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  schedules       ReminderSchedule[]
+
+  @@index([organizationId, trigger, isActive])
+}
+
+model ReminderSchedule {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @db.Uuid
+  ruleId           String                @db.Uuid
+  templateId       String                @db.Uuid
+  studentId        String                @db.Uuid
+  feeRecordId      String?               @db.Uuid
+  reminderLogId    String?               @unique @db.Uuid
+  scheduledFor     DateTime
+  processedAt      DateTime?
+  cancelledAt      DateTime?
+  status           ReminderScheduleStatus @default(PENDING)
+  failureReason    String?               @db.Text
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rule             ReminderRule          @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  template         ReminderTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  student          Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeRecord        FeeRecord?            @relation(fields: [feeRecordId], references: [id], onDelete: SetNull)
+  reminderLog      ReminderLog?          @relation(fields: [reminderLogId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, ruleId, studentId, feeRecordId])
+  @@index([organizationId, status, scheduledFor])
+}
+
+model ReminderProviderSetting {
+  id                     String       @id @default(uuid()) @db.Uuid
+  organizationId         String       @unique @db.Uuid
+  autoRemindersEnabled   Boolean      @default(false)
+  emailEnabled           Boolean      @default(false)
+  whatsappEnabled        Boolean      @default(false)
+  smsEnabled             Boolean      @default(false)
+  paymentConfirmationEnabled Boolean   @default(false)
+  senderName             String?      @db.VarChar(150)
+  replyToEmail           String?      @db.VarChar(255)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  organizationId String? @db.Uuid
+  actorUserId String?  @db.Uuid
+  module      String   @db.VarChar(100)
+  action      String   @db.VarChar(100)
+  targetId    String?  @db.VarChar(100)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actorUser   User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([module, action])
+  @@index([actorUserId, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model ContactInquiry {
+  id                String               @id @default(uuid()) @db.Uuid
+  fullName          String               @db.VarChar(150)
+  email             String               @db.VarChar(255)
+  institutionName   String               @db.VarChar(180)
+  phone             String?              @db.VarChar(30)
+  institutionType   String?              @db.VarChar(80)
+  expectedUserCount String?              @db.VarChar(40)
+  requestedModules  String[]
+  inquiryType       String?              @db.VarChar(100)
+  message           String               @db.Text
+  status            ContactInquiryStatus @default(NEW)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([email, createdAt])
+  @@index([status, createdAt])
+  @@index([institutionType])
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @db.VarChar(255)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
