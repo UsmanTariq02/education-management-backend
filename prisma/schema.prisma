@@ -15,6 +15,9 @@ model Organization {
   phone       String?     @db.VarChar(30)
   address     String?     @db.Text
   isActive    Boolean     @default(true)
+  userLimit   Int         @default(10)
+  studentLimit Int        @default(500)
+  enabledModules OrganizationModule[] @default([USERS, STUDENTS, BATCHES, FEES, ATTENDANCE, REMINDERS, REPORTS, ACTIVITY_LOGS, SETTINGS])
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   users       User[]
@@ -29,6 +32,18 @@ model Organization {
   reminderSchedules ReminderSchedule[]
   reminderProviderSetting ReminderProviderSetting?
   auditLogs   AuditLog[]
+}
+
+enum OrganizationModule {
+  USERS
+  STUDENTS
+  BATCHES
+  FEES
+  ATTENDANCE
+  REMINDERS
+  REPORTS
+  ACTIVITY_LOGS
+  SETTINGS
 }
 
 enum ReminderAutomationTrigger {

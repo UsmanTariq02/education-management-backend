@@ -1,8 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { BatchesService } from './batches.service';
 import { CreateBatchDto } from './dto/create-batch.dto';
@@ -10,6 +12,7 @@ import { UpdateBatchDto } from './dto/update-batch.dto';
 
 @ApiTags('Batches')
 @ApiBearerAuth()
+@ModuleAccess(OrganizationModule.BATCHES)
 @Controller({ path: 'batches', version: '1' })
 export class BatchesController {
   constructor(private readonly batchesService: BatchesService) {}

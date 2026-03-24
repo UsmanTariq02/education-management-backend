@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsEmail, IsOptional, IsString, Matches } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsOptional, IsString, Matches, Min } from 'class-validator';
+import { DEFAULT_ORGANIZATION_MODULES, OrganizationModule } from '../../../common/enums/organization-module.enum';
 
 export class CreateOrganizationDto {
   @ApiProperty()
@@ -29,4 +30,22 @@ export class CreateOrganizationDto {
   @IsBoolean()
   @IsOptional()
   isActive = true;
+
+  @ApiPropertyOptional({ default: 10 })
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  userLimit = 10;
+
+  @ApiPropertyOptional({ default: 500 })
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  studentLimit = 500;
+
+  @ApiPropertyOptional({ enum: OrganizationModule, isArray: true })
+  @IsArray()
+  @IsEnum(OrganizationModule, { each: true })
+  @IsOptional()
+  enabledModules: OrganizationModule[] = [...DEFAULT_ORGANIZATION_MODULES];
 }

@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { OrganizationModule } from '../../../common/enums/organization-module.enum';
 
 export class AuthUserDto {
   @ApiProperty()
@@ -12,6 +13,15 @@ export class AuthUserDto {
 
   @ApiProperty({ nullable: true })
   organizationName!: string | null;
+
+  @ApiProperty({ nullable: true })
+  userLimit!: number | null;
+
+  @ApiProperty({ nullable: true })
+  studentLimit!: number | null;
+
+  @ApiProperty({ enum: OrganizationModule, isArray: true })
+  enabledModules!: OrganizationModule[];
 
   @ApiProperty()
   firstName!: string;

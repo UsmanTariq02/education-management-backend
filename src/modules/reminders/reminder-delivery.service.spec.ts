@@ -48,6 +48,7 @@ describe('ReminderDeliveryService', () => {
         studentEmail: 'ali@example.com',
         studentPhone: '03001234567',
         guardianName: 'Parent',
+        guardianEmail: null,
         guardianPhone: '03007654321',
       },
     });
@@ -72,6 +73,7 @@ describe('ReminderDeliveryService', () => {
         studentEmail: 'ali@example.com',
         studentPhone: '03001234567',
         guardianName: 'Parent',
+        guardianEmail: null,
         guardianPhone: '03007654321',
       },
     });

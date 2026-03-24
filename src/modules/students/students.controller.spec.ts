@@ -1,5 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { Response } from 'express';
+import { StudentStatus } from '@prisma/client';
+import { SortDirection } from '../../common/enums/sort-direction.enum';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { StudentsController } from './students.controller';
 import { StudentsService } from './students.service';
 
@@ -36,6 +39,9 @@ describe('StudentsController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.STUDENTS],
       roles: ['ADMIN'],
       permissions: ['students.create'],
     };
@@ -46,13 +52,16 @@ describe('StudentsController', () => {
       guardianName: 'Parent',
       guardianPhone: '321',
       admissionDate: new Date(),
-      status: 'ACTIVE',
+      status: StudentStatus.ACTIVE,
     };
     const expected = {
       id: 'student-1',
+      organizationId: 'org-1',
+      organizationName: 'Default Academy',
       ...payload,
       fullName: 'Ali Khan',
       email: null,
+      guardianEmail: null,
       address: null,
       dateOfBirth: null,
       batches: [],
@@ -72,10 +81,13 @@ describe('StudentsController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.STUDENTS],
       roles: ['ADMIN'],
       permissions: ['students.read'],
     };
-    const query = { page: 1, limit: 10, sortOrder: 'desc' as const };
+    const query = { page: 1, limit: 10, sortOrder: SortDirection.DESC };
     const expected = { items: [], total: 0, page: 1, limit: 10 };
     service.findAll.mockResolvedValue(expected);
 
@@ -104,6 +116,9 @@ describe('StudentsController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.STUDENTS],
       roles: ['ADMIN'],
       permissions: ['students.create'],
     };
@@ -129,22 +144,28 @@ describe('StudentsController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.STUDENTS],
       roles: ['ADMIN'],
       permissions: ['students.read'],
     };
     const expected = {
       id: 'student-1',
+      organizationId: 'org-1',
+      organizationName: 'Default Academy',
       firstName: 'Ali',
       lastName: 'Khan',
       fullName: 'Ali Khan',
       email: null,
+      guardianEmail: null,
       phone: '123',
       guardianName: 'Parent',
       guardianPhone: '321',
       address: null,
       dateOfBirth: null,
       admissionDate: new Date(),
-      status: 'ACTIVE',
+      status: StudentStatus.ACTIVE,
       batches: [],
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -161,23 +182,29 @@ describe('StudentsController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.STUDENTS],
       roles: ['ADMIN'],
       permissions: ['students.update'],
     };
     const payload = { firstName: 'Updated' };
     const expected = {
       id: 'student-1',
+      organizationId: 'org-1',
+      organizationName: 'Default Academy',
       firstName: 'Updated',
       lastName: 'Khan',
       fullName: 'Updated Khan',
       email: null,
+      guardianEmail: null,
       phone: '123',
       guardianName: 'Parent',
       guardianPhone: '321',
       address: null,
       dateOfBirth: null,
       admissionDate: new Date(),
-      status: 'ACTIVE',
+      status: StudentStatus.ACTIVE,
       batches: [],
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -194,6 +221,9 @@ describe('StudentsController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.STUDENTS],
       roles: ['ADMIN'],
       permissions: ['students.delete'],
     };

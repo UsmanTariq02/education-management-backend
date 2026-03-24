@@ -1,12 +1,15 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { ReportsService } from './reports.service';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
+@ModuleAccess(OrganizationModule.REPORTS)
 @Controller({ path: 'reports', version: '1' })
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}

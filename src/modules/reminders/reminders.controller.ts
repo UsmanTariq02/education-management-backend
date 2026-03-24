@@ -1,8 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { CreateReminderDto } from './dto/create-reminder.dto';
@@ -16,6 +18,7 @@ import { RemindersService } from './reminders.service';
 
 @ApiTags('Reminders')
 @ApiBearerAuth()
+@ModuleAccess(OrganizationModule.REMINDERS)
 @Controller({ path: 'reminders', version: '1' })
 export class RemindersController {
   constructor(private readonly remindersService: RemindersService) {}

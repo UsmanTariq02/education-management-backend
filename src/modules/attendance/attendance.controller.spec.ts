@@ -1,4 +1,6 @@
 import { Test } from '@nestjs/testing';
+import { AttendanceStatus } from '@prisma/client';
+import { SortDirection } from '../../common/enums/sort-direction.enum';
 import { AttendanceController } from './attendance.controller';
 import { AttendanceService } from './attendance.service';
 
@@ -35,7 +37,7 @@ describe('AttendanceController', () => {
       roles: ['STAFF'],
       permissions: ['attendance.create'],
     };
-    const payload = { studentId: 'student-1', batchId: 'batch-1', attendanceDate: new Date(), status: 'PRESENT' };
+    const payload = { studentId: 'student-1', batchId: 'batch-1', attendanceDate: new Date(), status: AttendanceStatus.PRESENT };
     const expected = { id: 'attendance-1', ...payload };
     service.create.mockResolvedValue(expected as never);
 
@@ -52,7 +54,7 @@ describe('AttendanceController', () => {
       roles: ['STAFF'],
       permissions: ['attendance.read'],
     };
-    const query = { page: 1, limit: 10, sortOrder: 'desc' as const };
+    const query = { page: 1, limit: 10, sortOrder: SortDirection.DESC };
     const expected = { items: [], total: 0, page: 1, limit: 10 };
     service.findAll.mockResolvedValue(expected);
 
@@ -69,7 +71,7 @@ describe('AttendanceController', () => {
       roles: ['STAFF'],
       permissions: ['attendance.update'],
     };
-    const payload = { status: 'LATE' };
+    const payload = { status: AttendanceStatus.LATE };
     const expected = { id: 'attendance-1', studentId: 'student-1', batchId: 'batch-1', attendanceDate: new Date(), ...payload };
     service.update.mockResolvedValue(expected as never);
 

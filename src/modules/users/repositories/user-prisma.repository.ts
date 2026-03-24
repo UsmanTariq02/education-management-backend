@@ -14,6 +14,9 @@ const authorizationInclude = {
       id: true,
       name: true,
       isActive: true,
+      userLimit: true,
+      studentLimit: true,
+      enabledModules: true,
     },
   },
   userRoles: {

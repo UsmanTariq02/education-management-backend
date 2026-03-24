@@ -1,8 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { AttendanceService } from './attendance.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
@@ -10,6 +12,7 @@ import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 
 @ApiTags('Attendance')
 @ApiBearerAuth()
+@ModuleAccess(OrganizationModule.ATTENDANCE)
 @Controller({ path: 'attendance', version: '1' })
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}

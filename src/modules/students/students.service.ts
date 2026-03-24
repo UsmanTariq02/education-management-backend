@@ -2,7 +2,9 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { STUDENT_REPOSITORY } from '../../common/constants/injection-tokens';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { AuditLogService } from '../../common/services/audit-log.service';
+import { OrganizationAccessService } from '../../common/services/organization-access.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { StudentImportSummary } from './interfaces/student-import.interface';
@@ -15,12 +17,15 @@ export class StudentsService {
     @Inject(STUDENT_REPOSITORY)
     private readonly studentRepository: StudentRepository,
     private readonly auditLogService: AuditLogService,
+    private readonly organizationAccessService: OrganizationAccessService,
   ) {}
 
   async create(payload: CreateStudentDto, actor: CurrentUserContext) {
     if (!actor.organizationId) {
       throw new NotFoundException('Organization context is required');
     }
+    await this.organizationAccessService.assertModuleEnabled(actor.organizationId, OrganizationModule.STUDENTS);
+    await this.organizationAccessService.assertStudentLimitNotReached(actor.organizationId);
     const student = await this.studentRepository.create(payload, actor.organizationId);
     await this.auditLogService.log({
       actorUserId: actor.userId,
@@ -93,6 +98,7 @@ export class StudentsService {
     if (!actor.organizationId) {
       throw new NotFoundException('Organization context is required');
     }
+    await this.organizationAccessService.assertModuleEnabled(actor.organizationId, OrganizationModule.STUDENTS);
     const { rows, errors } = parseStudentCsv(file);
     const seenEmails = new Set<string>();
     const seenPhones = new Set<string>();
@@ -140,6 +146,8 @@ export class StudentsService {
         errors,
       };
     }
+
+    await this.organizationAccessService.assertStudentLimitNotReached(actor.organizationId, eligibleRows.length);
 
     const existingIdentifiers = await this.studentRepository.findExistingIdentifiers(
       eligibleRows.map((row) => row.email).filter((email): email is string => Boolean(email)),

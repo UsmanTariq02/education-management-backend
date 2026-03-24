@@ -1,10 +1,12 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { USER_REPOSITORY } from '../../common/constants/injection-tokens';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { OrganizationAccessService } from '../../common/services/organization-access.service';
 import { PaginatedResult } from '../../common/interfaces/paginated-result.interface';
 import { AuditLogService } from '../../common/services/audit-log.service';
 import { PasswordUtil } from '../../common/utils/password.util';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { RolesService } from '../roles/roles.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -18,6 +20,7 @@ export class UsersService {
     private readonly userRepository: UserRepository,
     private readonly rolesService: RolesService,
     private readonly auditLogService: AuditLogService,
+    private readonly organizationAccessService: OrganizationAccessService,
   ) {}
 
   async create(payload: CreateUserDto, actor: CurrentUserContext): Promise<UserResponseDto> {
@@ -27,6 +30,12 @@ export class UsersService {
     const organizationId: string | null = actor.roles.includes('SUPER_ADMIN')
       ? payload.organizationId ?? null
       : scopedOrganizationId ?? null;
+
+    if (organizationId) {
+      await this.organizationAccessService.assertModuleEnabled(organizationId, OrganizationModule.USERS);
+      await this.organizationAccessService.assertUserLimitNotReached(organizationId);
+    }
+
     const user = await this.userRepository.create(payload, passwordHash, organizationId);
     await this.auditLogService.log({
       actorUserId: actor.userId,

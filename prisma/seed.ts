@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { DEFAULT_ORGANIZATION_MODULES } from '../src/common/enums/organization-module.enum';
 
 const prisma = new PrismaClient();
 
@@ -41,6 +42,9 @@ async function main(): Promise<void> {
       email: 'info@default-academy.edu.local',
       phone: '03000000000',
       isActive: true,
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: DEFAULT_ORGANIZATION_MODULES,
     },
     create: {
       name: 'Default Academy',
@@ -49,6 +53,9 @@ async function main(): Promise<void> {
       phone: '03000000000',
       address: 'Default campus',
       isActive: true,
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: DEFAULT_ORGANIZATION_MODULES,
     },
   });
 

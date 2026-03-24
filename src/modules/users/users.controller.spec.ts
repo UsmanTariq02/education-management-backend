@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { SortDirection } from '../../common/enums/sort-direction.enum';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
@@ -33,6 +34,9 @@ describe('UsersController', () => {
       email: 'superadmin@edu.local',
       organizationId: null,
       organizationName: null,
+      userLimit: null,
+      studentLimit: null,
+      enabledModules: [],
       roles: ['SUPER_ADMIN'],
       permissions: ['users.create'],
     };
@@ -49,6 +53,8 @@ describe('UsersController', () => {
       firstName: 'A',
       lastName: 'B',
       email: 'a@edu.local',
+      organizationId: null,
+      organizationName: null,
       isActive: true,
       roles: ['ADMIN'],
       permissions: ['users.read'],
@@ -68,10 +74,13 @@ describe('UsersController', () => {
       email: 'superadmin@edu.local',
       organizationId: null,
       organizationName: null,
+      userLimit: null,
+      studentLimit: null,
+      enabledModules: [],
       roles: ['SUPER_ADMIN'],
       permissions: ['users.read'],
     };
-    const query = { page: 1, limit: 10, sortOrder: 'desc' as const };
+    const query = { page: 1, limit: 10, sortOrder: SortDirection.DESC };
     const expected = { items: [], total: 0, page: 1, limit: 10 };
 
     service.findAll.mockResolvedValue(expected);
@@ -86,6 +95,9 @@ describe('UsersController', () => {
       email: 'superadmin@edu.local',
       organizationId: null,
       organizationName: null,
+      userLimit: null,
+      studentLimit: null,
+      enabledModules: [],
       roles: ['SUPER_ADMIN'],
       permissions: ['users.read'],
     };
@@ -94,6 +106,8 @@ describe('UsersController', () => {
       firstName: 'A',
       lastName: 'B',
       email: 'a@edu.local',
+      organizationId: null,
+      organizationName: null,
       isActive: true,
       roles: ['ADMIN'],
       permissions: ['users.read'],
@@ -113,6 +127,9 @@ describe('UsersController', () => {
       email: 'superadmin@edu.local',
       organizationId: null,
       organizationName: null,
+      userLimit: null,
+      studentLimit: null,
+      enabledModules: [],
       roles: ['SUPER_ADMIN'],
       permissions: ['users.update'],
     };
@@ -122,6 +139,8 @@ describe('UsersController', () => {
       firstName: 'Updated',
       lastName: 'B',
       email: 'a@edu.local',
+      organizationId: null,
+      organizationName: null,
       isActive: true,
       roles: ['ADMIN'],
       permissions: ['users.read'],
@@ -141,6 +160,9 @@ describe('UsersController', () => {
       email: 'superadmin@edu.local',
       organizationId: null,
       organizationName: null,
+      userLimit: null,
+      studentLimit: null,
+      enabledModules: [],
       roles: ['SUPER_ADMIN'],
       permissions: ['users.delete'],
     };

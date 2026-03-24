@@ -1,4 +1,6 @@
 import { Test } from '@nestjs/testing';
+import { ReminderChannel, ReminderStatus } from '@prisma/client';
+import { SortDirection } from '../../common/enums/sort-direction.enum';
 import { RemindersController } from './reminders.controller';
 import { RemindersService } from './reminders.service';
 
@@ -35,7 +37,7 @@ describe('RemindersController', () => {
       roles: ['ADMIN'],
       permissions: ['reminders.create'],
     };
-    const payload = { studentId: 'student-1', channel: 'EMAIL', message: 'Reminder', status: 'SENT' };
+    const payload = { studentId: 'student-1', channel: ReminderChannel.EMAIL, message: 'Reminder', status: ReminderStatus.SENT };
     const expected = { id: 'reminder-1', ...payload };
     service.create.mockResolvedValue(expected as never);
 
@@ -52,7 +54,7 @@ describe('RemindersController', () => {
       roles: ['ADMIN'],
       permissions: ['reminders.read'],
     };
-    const query = { page: 1, limit: 10, sortOrder: 'desc' as const };
+    const query = { page: 1, limit: 10, sortOrder: SortDirection.DESC };
     const expected = { items: [], total: 0, page: 1, limit: 10 };
     service.findAll.mockResolvedValue(expected);
 

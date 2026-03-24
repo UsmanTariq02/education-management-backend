@@ -1,0 +1,26 @@
+CREATE TYPE "OrganizationModule" AS ENUM (
+  'USERS',
+  'STUDENTS',
+  'BATCHES',
+  'FEES',
+  'ATTENDANCE',
+  'REMINDERS',
+  'REPORTS',
+  'ACTIVITY_LOGS',
+  'SETTINGS'
+);
+
+ALTER TABLE "Organization"
+ADD COLUMN "userLimit" INTEGER NOT NULL DEFAULT 10,
+ADD COLUMN "studentLimit" INTEGER NOT NULL DEFAULT 500,
+ADD COLUMN "enabledModules" "OrganizationModule"[] NOT NULL DEFAULT ARRAY[
+  'USERS',
+  'STUDENTS',
+  'BATCHES',
+  'FEES',
+  'ATTENDANCE',
+  'REMINDERS',
+  'REPORTS',
+  'ACTIVITY_LOGS',
+  'SETTINGS'
+]::"OrganizationModule"[];

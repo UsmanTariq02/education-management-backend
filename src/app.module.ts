@@ -7,6 +7,7 @@ import configuration from './config/configuration';
 import { CommonModule } from './common/common.module';
 import { envValidationSchema } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { ModuleAccessGuard } from './common/guards/module-access.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { ApiResponseInterceptor } from './common/interceptors/api-response.interceptor';
@@ -63,6 +64,7 @@ import { InquiriesModule } from './modules/inquiries/inquiries.module';
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: ModuleAccessGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },

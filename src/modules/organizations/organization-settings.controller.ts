@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
@@ -9,6 +11,7 @@ import { OrganizationsService } from './organizations.service';
 @ApiTags('Organization Settings')
 @ApiBearerAuth()
 @Roles('ADMIN')
+@ModuleAccess(OrganizationModule.SETTINGS)
 @Controller({ path: 'organization-settings', version: '1' })
 export class OrganizationSettingsController {
   constructor(private readonly organizationsService: OrganizationsService) {}

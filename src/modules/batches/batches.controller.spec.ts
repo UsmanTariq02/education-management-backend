@@ -1,4 +1,6 @@
 import { Test } from '@nestjs/testing';
+import { SortDirection } from '../../common/enums/sort-direction.enum';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { BatchesController } from './batches.controller';
 import { BatchesService } from './batches.service';
 
@@ -33,11 +35,14 @@ describe('BatchesController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.BATCHES],
       roles: ['ADMIN'],
       permissions: ['batches.create'],
     };
     const payload = { name: 'Batch A', code: 'BA-1', startDate: new Date(), isActive: true };
-    const expected = { id: 'batch-1', ...payload, description: null, endDate: null, scheduleInfo: null, createdAt: new Date(), updatedAt: new Date() };
+    const expected = { id: 'batch-1', organizationId: 'org-1', organizationName: 'Default Academy', ...payload, description: null, endDate: null, scheduleInfo: null, createdAt: new Date(), updatedAt: new Date() };
     service.create.mockResolvedValue(expected);
 
     await expect(controller.create(payload, actor)).resolves.toEqual(expected);
@@ -50,10 +55,13 @@ describe('BatchesController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.BATCHES],
       roles: ['ADMIN'],
       permissions: ['batches.read'],
     };
-    const query = { page: 1, limit: 10, sortOrder: 'desc' as const };
+    const query = { page: 1, limit: 10, sortOrder: SortDirection.DESC };
     const expected = { items: [], total: 0, page: 1, limit: 10 };
     service.findAll.mockResolvedValue(expected);
 
@@ -67,6 +75,9 @@ describe('BatchesController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.BATCHES],
       roles: ['ADMIN'],
       permissions: ['batches.read'],
     };
@@ -83,6 +94,9 @@ describe('BatchesController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.BATCHES],
       roles: ['ADMIN'],
       permissions: ['batches.update'],
     };
@@ -100,6 +114,9 @@ describe('BatchesController', () => {
       email: 'admin@edu.local',
       organizationId: 'org-1',
       organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.BATCHES],
       roles: ['ADMIN'],
       permissions: ['batches.delete'],
     };

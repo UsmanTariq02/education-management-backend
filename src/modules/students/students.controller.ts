@@ -18,8 +18,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
@@ -27,6 +29,7 @@ import { StudentsService } from './students.service';
 
 @ApiTags('Students')
 @ApiBearerAuth()
+@ModuleAccess(OrganizationModule.STUDENTS)
 @Controller({ path: 'students', version: '1' })
 export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}

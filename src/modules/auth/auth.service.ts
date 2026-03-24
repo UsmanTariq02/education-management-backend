@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import { AppConfiguration } from '../../config/configuration';
 import { USER_REPOSITORY } from '../../common/constants/injection-tokens';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { PasswordUtil } from '../../common/utils/password.util';
 import { AuditLogService } from '../../common/services/audit-log.service';
 import { LoginDto } from './dto/login.dto';
@@ -127,6 +128,9 @@ export class AuthService {
         email: user.email,
         organizationId: user.organizationId,
         organizationName: user.organizationName,
+        userLimit: user.userLimit,
+        studentLimit: user.studentLimit,
+        enabledModules: user.enabledModules,
         roles: user.roles,
         permissions: user.permissions,
       },
@@ -177,7 +181,14 @@ export class AuthService {
 
   private mapUser(
     user: User & {
-      organization?: { id: string; name: string; isActive: boolean } | null;
+      organization?: {
+        id: string;
+        name: string;
+        isActive: boolean;
+        userLimit: number;
+        studentLimit: number;
+        enabledModules: string[];
+      } | null;
       userRoles: Array<{ role: { name: string; rolePermissions: Array<{ permission: { name: string } }> } }>;
     },
   ): AuthenticatedUser {
@@ -195,6 +206,9 @@ export class AuthService {
       email: user.email,
       organizationId: user.organizationId,
       organizationName: user.organization?.name ?? null,
+      userLimit: user.organization?.userLimit ?? null,
+      studentLimit: user.organization?.studentLimit ?? null,
+      enabledModules: (user.organization?.enabledModules as OrganizationModule[] | undefined) ?? [],
       firstName: user.firstName,
       lastName: user.lastName,
       isActive: user.isActive,

@@ -9,6 +9,9 @@ export type UserWithAuthorization = User & {
     id: string;
     name: string;
     isActive: boolean;
+    userLimit: number;
+    studentLimit: number;
+    enabledModules: string[];
   } | null;
   userRoles: Array<{
     role: {

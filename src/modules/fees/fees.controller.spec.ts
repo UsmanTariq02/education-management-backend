@@ -1,4 +1,6 @@
 import { Test } from '@nestjs/testing';
+import { FeeRecordStatus } from '@prisma/client';
+import { SortDirection } from '../../common/enums/sort-direction.enum';
 import { FeesController } from './fees.controller';
 import { FeesService } from './fees.service';
 
@@ -54,7 +56,7 @@ describe('FeesController', () => {
       roles: ['ADMIN'],
       permissions: ['fees.read'],
     };
-    const query = { page: 1, limit: 10, sortOrder: 'desc' as const };
+    const query = { page: 1, limit: 10, sortOrder: SortDirection.DESC };
     const expected = { items: [], total: 0, page: 1, limit: 10 };
     service.listPlans.mockResolvedValue(expected);
 
@@ -71,7 +73,7 @@ describe('FeesController', () => {
       roles: ['ADMIN'],
       permissions: ['fees.create'],
     };
-    const payload = { studentId: 'student-1', feePlanId: 'plan-1', month: 3, year: 2026, amountDue: 1000, amountPaid: 0, status: 'PENDING' };
+    const payload = { studentId: 'student-1', feePlanId: 'plan-1', month: 3, year: 2026, amountDue: 1000, amountPaid: 0, status: FeeRecordStatus.PENDING };
     const expected = { id: 'record-1', ...payload };
     service.createRecord.mockResolvedValue(expected as never);
 
@@ -88,7 +90,7 @@ describe('FeesController', () => {
       roles: ['ADMIN'],
       permissions: ['fees.read'],
     };
-    const query = { page: 1, limit: 10, sortOrder: 'desc' as const };
+    const query = { page: 1, limit: 10, sortOrder: SortDirection.DESC };
     const expected = { items: [], total: 0, page: 1, limit: 10 };
     service.listRecords.mockResolvedValue(expected);
 
@@ -105,7 +107,7 @@ describe('FeesController', () => {
       roles: ['ADMIN'],
       permissions: ['fees.update'],
     };
-    const payload = { amountPaid: 1000, status: 'PAID' };
+    const payload = { amountPaid: 1000, status: FeeRecordStatus.PAID };
     const expected = { id: 'record-1', studentId: 'student-1', feePlanId: 'plan-1', ...payload };
     service.updateRecord.mockResolvedValue(expected as never);
 

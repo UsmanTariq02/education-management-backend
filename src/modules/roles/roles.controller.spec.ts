@@ -34,7 +34,7 @@ describe('RolesController', () => {
   });
 
   it('findOne should delegate to service', async () => {
-    const expected = { id: 'role-1', name: 'ADMIN', description: 'Admin', rolePermissions: [] };
+    const expected = { id: 'role-1', name: 'ADMIN', description: 'Admin', rolePermissions: [], createdAt: new Date(), updatedAt: new Date() };
     service.findOne.mockResolvedValue(expected);
 
     await expect(controller.findOne('role-1')).resolves.toEqual(expected);
@@ -42,9 +42,9 @@ describe('RolesController', () => {
   });
 
   it('create should delegate to service', async () => {
-    const actor = { userId: '1', email: 'superadmin@edu.local', roles: ['SUPER_ADMIN'], permissions: ['users.update'] };
+    const actor = { userId: '1', email: 'superadmin@edu.local', organizationId: null, organizationName: null, userLimit: null, studentLimit: null, enabledModules: [], roles: ['SUPER_ADMIN'], permissions: ['users.update'] };
     const payload = { name: 'TEACHER', description: 'Teacher', permissionIds: ['perm-1'] };
-    const expected = { id: 'role-1', ...payload, rolePermissions: [] };
+    const expected = { id: 'role-1', name: payload.name, description: payload.description, rolePermissions: [], createdAt: new Date(), updatedAt: new Date() };
     service.create.mockResolvedValue(expected);
 
     await expect(controller.create(payload, actor)).resolves.toEqual(expected);
@@ -52,9 +52,9 @@ describe('RolesController', () => {
   });
 
   it('update should delegate to service', async () => {
-    const actor = { userId: '1', email: 'superadmin@edu.local', roles: ['SUPER_ADMIN'], permissions: ['users.update'] };
+    const actor = { userId: '1', email: 'superadmin@edu.local', organizationId: null, organizationName: null, userLimit: null, studentLimit: null, enabledModules: [], roles: ['SUPER_ADMIN'], permissions: ['users.update'] };
     const payload = { description: 'Updated' };
-    const expected = { id: 'role-1', name: 'ADMIN', description: 'Updated', rolePermissions: [] };
+    const expected = { id: 'role-1', name: 'ADMIN', description: 'Updated', rolePermissions: [], createdAt: new Date(), updatedAt: new Date() };
     service.update.mockResolvedValue(expected);
 
     await expect(controller.update('role-1', payload, actor)).resolves.toEqual(expected);

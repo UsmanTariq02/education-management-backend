@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
@@ -33,8 +34,14 @@ describe('AuthController', () => {
       user: {
         id: 'user-1',
         email: payload.email,
+        organizationId: 'org-1',
+        organizationName: 'Default Academy',
+        userLimit: 25,
+        studentLimit: 1000,
+        enabledModules: [OrganizationModule.USERS],
         firstName: 'Admin',
         lastName: 'User',
+        isActive: true,
         roles: ['ADMIN'],
         permissions: ['users.read'],
       },
@@ -54,8 +61,14 @@ describe('AuthController', () => {
       user: {
         id: 'user-1',
         email: 'admin@edu.local',
+        organizationId: 'org-1',
+        organizationName: 'Default Academy',
+        userLimit: 25,
+        studentLimit: 1000,
+        enabledModules: [OrganizationModule.USERS],
         firstName: 'Admin',
         lastName: 'User',
+        isActive: true,
         roles: ['ADMIN'],
         permissions: ['users.read'],
       },
@@ -71,12 +84,22 @@ describe('AuthController', () => {
     const actor = {
       userId: 'user-1',
       email: 'admin@edu.local',
+      organizationId: 'org-1',
+      organizationName: 'Default Academy',
+      userLimit: 25,
+      studentLimit: 1000,
+      enabledModules: [OrganizationModule.USERS],
       roles: ['ADMIN'],
       permissions: ['users.read'],
     };
     const expected = {
       id: actor.userId,
       email: actor.email,
+      organizationId: actor.organizationId,
+      organizationName: actor.organizationName,
+      userLimit: actor.userLimit,
+      studentLimit: actor.studentLimit,
+      enabledModules: actor.enabledModules,
       firstName: 'Admin',
       lastName: 'User',
       roles: actor.roles,
