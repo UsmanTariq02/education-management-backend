@@ -17,6 +17,9 @@ describe('AuthController', () => {
             login: jest.fn(),
             refreshTokens: jest.fn(),
             me: jest.fn(),
+            logout: jest.fn(),
+            getSecuritySummary: jest.fn(),
+            revokeSession: jest.fn(),
           },
         },
       ],
@@ -49,8 +52,8 @@ describe('AuthController', () => {
 
     service.login.mockResolvedValue(expected);
 
-    await expect(controller.login(payload)).resolves.toEqual(expected);
-    expect(service.login).toHaveBeenCalledWith(payload);
+    await expect(controller.login(payload, {} as never)).resolves.toEqual(expected);
+    expect(service.login).toHaveBeenCalledWith(payload, {} as never);
   });
 
   it('refresh should delegate to service', async () => {
@@ -76,8 +79,8 @@ describe('AuthController', () => {
 
     service.refreshTokens.mockResolvedValue(expected);
 
-    await expect(controller.refresh(payload)).resolves.toEqual(expected);
-    expect(service.refreshTokens).toHaveBeenCalledWith(payload);
+    await expect(controller.refresh(payload, {} as never)).resolves.toEqual(expected);
+    expect(service.refreshTokens).toHaveBeenCalledWith(payload, {} as never);
   });
 
   it('me should delegate to service', async () => {

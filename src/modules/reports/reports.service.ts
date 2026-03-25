@@ -107,6 +107,26 @@ export class ReportsService {
     return this.reportRepository.getUserStatusSummary(this.resolveOrganizationId(actor));
   }
 
+  async getAcademicDashboardSummary(actor: CurrentUserContext) {
+    return this.reportRepository.getAcademicDashboardSummary(this.resolveOrganizationId(actor));
+  }
+
+  async getGradeDistribution(actor: CurrentUserContext) {
+    return this.reportRepository.getGradeDistribution(this.resolveOrganizationId(actor));
+  }
+
+  async getExamScheduleTrend(actor: CurrentUserContext) {
+    return this.reportRepository.getExamScheduleTrend(12, this.resolveOrganizationId(actor));
+  }
+
+  async getBatchPerformance(actor: CurrentUserContext) {
+    return this.reportRepository.getBatchPerformance(this.resolveOrganizationId(actor));
+  }
+
+  async getResultStatusSummary(actor: CurrentUserContext) {
+    return this.reportRepository.getResultStatusSummary(this.resolveOrganizationId(actor));
+  }
+
   private resolveOrganizationId(actor: CurrentUserContext): string | undefined {
     if (actor.roles.includes('SUPER_ADMIN')) {
       return undefined;

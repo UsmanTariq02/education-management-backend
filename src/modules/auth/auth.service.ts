@@ -1,7 +1,9 @@
+import { randomUUID } from 'crypto';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
+import { Request } from 'express';
 import { AppConfiguration } from '../../config/configuration';
 import { USER_REPOSITORY } from '../../common/constants/injection-tokens';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
@@ -16,6 +18,9 @@ import { UserRepository } from '../users/interfaces/user.repository.interface';
 
 @Injectable()
 export class AuthService {
+  private static readonly LOGIN_FAILURE_WINDOW_MINUTES = 15;
+  private static readonly MAX_FAILED_LOGIN_ATTEMPTS = 5;
+
   constructor(
     @Inject(USER_REPOSITORY)
     private readonly userRepository: UserRepository,
@@ -24,10 +29,21 @@ export class AuthService {
     private readonly auditLogService: AuditLogService,
   ) {}
 
-  async login(payload: LoginDto): Promise<{ accessToken: string; refreshToken: string; user: AuthenticatedUser }> {
+  async login(
+    payload: LoginDto,
+    request?: Request,
+  ): Promise<{ accessToken: string; refreshToken: string; user: AuthenticatedUser }> {
+    const requestMetadata = this.extractRequestMetadata(request);
+    await this.assertLoginNotRateLimited(payload.email, requestMetadata);
     const user = await this.userRepository.findByEmailWithAuthorization(payload.email);
 
     if (!user || !(await PasswordUtil.compare(payload.password, user.passwordHash))) {
+      await this.userRepository.createLoginEvent({
+        email: payload.email.trim().toLowerCase(),
+        status: 'FAILED',
+        failureReason: 'invalid-credentials',
+        ...requestMetadata,
+      });
       await this.auditLogService.log({
         module: 'auth',
         action: 'login-failed',
@@ -36,16 +52,28 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    await this.ensureAuthenticationAllowed(user, payload.email);
+    await this.ensureAuthenticationAllowed(user, payload.email, requestMetadata);
 
     const hydratedUser = this.mapUser(user);
     const tokens = await this.generateTokenPair(hydratedUser);
 
     await this.userRepository.storeRefreshToken(
+      tokens.sessionId,
       user.id,
       await PasswordUtil.hash(tokens.refreshToken),
       this.resolveRefreshTokenExpiry(),
+      {
+        ...requestMetadata,
+        lastUsedAt: new Date(),
+      },
     );
+    await this.userRepository.createLoginEvent({
+      userId: user.id,
+      organizationId: user.organizationId,
+      email: user.email,
+      status: 'SUCCESS',
+      ...requestMetadata,
+    });
     await this.auditLogService.log({
       actorUserId: user.id,
       module: 'auth',
@@ -57,8 +85,12 @@ export class AuthService {
     return { ...tokens, user: hydratedUser };
   }
 
-  async refreshTokens(payload: RefreshTokenDto): Promise<{ accessToken: string; refreshToken: string; user: AuthenticatedUser }> {
-    const decoded = await this.jwtService.verifyAsync<{ sub: string }>(payload.refreshToken, {
+  async refreshTokens(
+    payload: RefreshTokenDto,
+    request?: Request,
+  ): Promise<{ accessToken: string; refreshToken: string; user: AuthenticatedUser }> {
+    const requestMetadata = this.extractRequestMetadata(request);
+    const decoded = await this.jwtService.verifyAsync<{ sub: string; sid: string }>(payload.refreshToken, {
       secret: this.configService.get('auth.refreshSecret', { infer: true }),
     });
 
@@ -67,9 +99,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    await this.ensureAuthenticationAllowed(user, user.email);
+    await this.ensureAuthenticationAllowed(user, user.email, requestMetadata);
 
-    const refreshTokenRecord = await this.userRepository.findActiveRefreshTokenByUserId(user.id);
+    const refreshTokenRecord = await this.userRepository.findActiveRefreshTokenById(decoded.sid, user.id);
     if (!refreshTokenRecord) {
       throw new UnauthorizedException('Refresh token session not found');
     }
@@ -79,16 +111,28 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    await this.userRepository.revokeRefreshToken(refreshTokenRecord.id);
+    await this.userRepository.revokeRefreshToken(refreshTokenRecord.id, 'refresh-rotated');
 
     const hydratedUser = this.mapUser(user);
     const tokens = await this.generateTokenPair(hydratedUser);
 
     await this.userRepository.storeRefreshToken(
+      tokens.sessionId,
       user.id,
       await PasswordUtil.hash(tokens.refreshToken),
       this.resolveRefreshTokenExpiry(),
+      {
+        ...requestMetadata,
+        lastUsedAt: new Date(),
+      },
     );
+    await this.userRepository.createLoginEvent({
+      userId: user.id,
+      organizationId: user.organizationId,
+      email: user.email,
+      status: 'REFRESH',
+      ...requestMetadata,
+    });
     await this.auditLogService.log({
       actorUserId: user.id,
       module: 'auth',
@@ -99,8 +143,21 @@ export class AuthService {
     return { ...tokens, user: hydratedUser };
   }
 
-  async logout(userId: string, payload?: LogoutDto): Promise<void> {
-    await this.userRepository.revokeActiveRefreshTokensByUserId(userId);
+  async logout(userId: string, payload?: LogoutDto, request?: Request): Promise<void> {
+    const user = await this.userRepository.findByIdWithAuthorization(userId);
+    const requestMetadata = this.extractRequestMetadata(request);
+
+    await this.userRepository.revokeActiveRefreshTokensByUserId(userId, payload?.reason ?? 'user-initiated');
+    if (user) {
+      await this.userRepository.createLoginEvent({
+        userId,
+        organizationId: user.organizationId,
+        email: user.email,
+        status: 'LOGOUT',
+        failureReason: payload?.reason ?? null,
+        ...requestMetadata,
+      });
+    }
     await this.auditLogService.log({
       actorUserId: userId,
       module: 'auth',
@@ -121,7 +178,66 @@ export class AuthService {
     return this.mapUser(user);
   }
 
-  private async generateTokenPair(user: AuthenticatedUser): Promise<TokenPair> {
+  async getSecuritySummary(userId: string): Promise<{
+    sessions: Array<{
+      id: string;
+      ipAddress: string | null;
+      userAgent: string | null;
+      lastUsedAt: Date | null;
+      createdAt: Date;
+      expiresAt: Date;
+      revokedAt: Date | null;
+      revocationReason: string | null;
+    }>;
+    recentLoginEvents: Array<{
+      id: string;
+      email: string;
+      status: 'SUCCESS' | 'FAILED' | 'BLOCKED' | 'LOGOUT' | 'REFRESH' | 'SESSION_REVOKED';
+      ipAddress: string | null;
+      userAgent: string | null;
+      failureReason: string | null;
+      createdAt: Date;
+    }>;
+  }> {
+    const [sessions, recentLoginEvents] = await Promise.all([
+      this.userRepository.findActiveSessionsByUserId(userId),
+      this.userRepository.findRecentLoginEventsByUserId(userId, 20),
+    ]);
+
+    return { sessions, recentLoginEvents };
+  }
+
+  async revokeSession(userId: string, sessionId: string, request?: Request): Promise<void> {
+    const user = await this.userRepository.findByIdWithAuthorization(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const sessions = await this.userRepository.findActiveSessionsByUserId(userId);
+    const session = sessions.find((item) => item.id === sessionId && !item.revokedAt);
+    if (!session) {
+      throw new UnauthorizedException('Session not found');
+    }
+
+    await this.userRepository.revokeRefreshToken(sessionId, 'user-revoked');
+    await this.userRepository.createLoginEvent({
+      userId,
+      organizationId: user.organizationId,
+      email: user.email,
+      status: 'SESSION_REVOKED',
+      failureReason: 'user-revoked',
+      ...this.extractRequestMetadata(request),
+    });
+    await this.auditLogService.log({
+      actorUserId: userId,
+      module: 'auth',
+      action: 'session-revoked',
+      targetId: sessionId,
+    });
+  }
+
+  private async generateTokenPair(user: AuthenticatedUser): Promise<TokenPair & { sessionId: string }> {
+    const sessionId = randomUUID();
     const accessToken = await this.jwtService.signAsync(
       {
         sub: user.id,
@@ -141,14 +257,14 @@ export class AuthService {
     );
 
     const refreshToken = await this.jwtService.signAsync(
-      { sub: user.id },
+      { sub: user.id, sid: sessionId },
       {
         secret: this.configService.get('auth.refreshSecret', { infer: true }),
         expiresIn: this.configService.get('auth.refreshExpiresIn', { infer: true }),
       },
     );
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, sessionId };
   }
 
   private resolveRefreshTokenExpiry(): Date {
@@ -223,10 +339,19 @@ export class AuthService {
       userRoles?: Array<{ role: { name: string } }>;
     },
     email: string,
+    requestMetadata?: { ipAddress: string | null; userAgent: string | null },
   ): Promise<void> {
     const roles = user.userRoles?.map((userRole) => userRole.role.name) ?? [];
 
     if (!user.isActive) {
+      await this.userRepository.createLoginEvent({
+        userId: user.id,
+        organizationId: user.organizationId,
+        email: user.email,
+        status: 'BLOCKED',
+        failureReason: 'inactive-account',
+        ...requestMetadata,
+      });
       await this.auditLogService.log({
         actorUserId: user.id,
         module: 'auth',
@@ -238,6 +363,13 @@ export class AuthService {
     }
 
     if (!roles.includes('SUPER_ADMIN') && !user.organizationId) {
+      await this.userRepository.createLoginEvent({
+        userId: user.id,
+        email: user.email,
+        status: 'BLOCKED',
+        failureReason: 'missing-organization-scope',
+        ...requestMetadata,
+      });
       await this.auditLogService.log({
         actorUserId: user.id,
         module: 'auth',
@@ -249,6 +381,14 @@ export class AuthService {
     }
 
     if (user.organizationId && user.organization && !user.organization.isActive) {
+      await this.userRepository.createLoginEvent({
+        userId: user.id,
+        organizationId: user.organization.id,
+        email: user.email,
+        status: 'BLOCKED',
+        failureReason: 'inactive-organization',
+        ...requestMetadata,
+      });
       await this.auditLogService.log({
         actorUserId: user.id,
         module: 'auth',
@@ -263,5 +403,42 @@ export class AuthService {
       });
       throw new UnauthorizedException('Organization is inactive');
     }
+  }
+
+  private async assertLoginNotRateLimited(
+    email: string,
+    requestMetadata: { ipAddress: string | null; userAgent: string | null },
+  ): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const since = new Date(Date.now() - AuthService.LOGIN_FAILURE_WINDOW_MINUTES * 60 * 1000);
+    const recentFailures = await this.userRepository.countRecentFailedLoginEvents(normalizedEmail, since);
+
+    if (recentFailures < AuthService.MAX_FAILED_LOGIN_ATTEMPTS) {
+      return;
+    }
+
+    await this.userRepository.createLoginEvent({
+      email: normalizedEmail,
+      status: 'BLOCKED',
+      failureReason: 'too-many-failed-attempts',
+      ...requestMetadata,
+    });
+    await this.auditLogService.log({
+      module: 'auth',
+      action: 'login-rate-limited',
+      metadata: { email: normalizedEmail },
+    });
+    throw new UnauthorizedException('Too many failed login attempts. Try again later.');
+  }
+
+  private extractRequestMetadata(request?: Request): { ipAddress: string | null; userAgent: string | null } {
+    const forwardedFor = request?.headers['x-forwarded-for'];
+    const ipAddress =
+      typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0]?.trim() ?? null
+        : request?.ip ?? request?.socket?.remoteAddress ?? null;
+    const userAgent = typeof request?.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null;
+
+    return { ipAddress, userAgent };
   }
 }

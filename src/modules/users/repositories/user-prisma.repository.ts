@@ -164,24 +164,34 @@ export class UserPrismaRepository implements UserRepository {
     });
   }
 
-  async storeRefreshToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void> {
-    await this.prisma.refreshToken.create({
+  async storeRefreshToken(
+    sessionId: string,
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+    metadata?: { ipAddress?: string | null; userAgent?: string | null; lastUsedAt?: Date | null },
+  ): Promise<void> {
+    await (this.prisma.refreshToken as never as { create(args: unknown): Promise<unknown> }).create({
       data: {
+        id: sessionId,
         userId,
         tokenHash,
         expiresAt,
+        ipAddress: metadata?.ipAddress ?? null,
+        userAgent: metadata?.userAgent ?? null,
+        lastUsedAt: metadata?.lastUsedAt ?? null,
       },
     });
   }
 
-  async findActiveRefreshTokenByUserId(userId: string): Promise<{ id: string; tokenHash: string } | null> {
+  async findActiveRefreshTokenById(tokenId: string, userId: string): Promise<{ id: string; tokenHash: string } | null> {
     return this.prisma.refreshToken.findFirst({
       where: {
+        id: tokenId,
         userId,
         revokedAt: null,
         expiresAt: { gt: new Date() },
       },
-      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         tokenHash: true,
@@ -189,21 +199,125 @@ export class UserPrismaRepository implements UserRepository {
     });
   }
 
-  async revokeRefreshToken(tokenId: string): Promise<void> {
-    await this.prisma.refreshToken.update({
-      where: { id: tokenId },
-      data: { revokedAt: new Date() },
+  async findActiveSessionsByUserId(userId: string): Promise<Array<{
+    id: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+    lastUsedAt: Date | null;
+    createdAt: Date;
+    expiresAt: Date;
+    revokedAt: Date | null;
+    revocationReason: string | null;
+  }>> {
+    return (this.prisma.refreshToken as never as { findMany(args: unknown): Promise<Array<{
+      id: string;
+      ipAddress: string | null;
+      userAgent: string | null;
+      lastUsedAt: Date | null;
+      createdAt: Date;
+      expiresAt: Date;
+      revokedAt: Date | null;
+      revocationReason: string | null;
+    }>> }).findMany({
+      where: { userId },
+      orderBy: [{ revokedAt: 'asc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        ipAddress: true,
+        userAgent: true,
+        lastUsedAt: true,
+        createdAt: true,
+        expiresAt: true,
+        revokedAt: true,
+        revocationReason: true,
+      },
     });
   }
 
-  async revokeActiveRefreshTokensByUserId(userId: string): Promise<void> {
-    await this.prisma.refreshToken.updateMany({
+  async revokeRefreshToken(tokenId: string, reason?: string): Promise<void> {
+    await (this.prisma.refreshToken as never as { update(args: unknown): Promise<unknown> }).update({
+      where: { id: tokenId },
+      data: { revokedAt: new Date(), revocationReason: reason ?? null },
+    });
+  }
+
+  async revokeActiveRefreshTokensByUserId(userId: string, reason?: string): Promise<void> {
+    await (this.prisma.refreshToken as never as { updateMany(args: unknown): Promise<unknown> }).updateMany({
       where: {
         userId,
         revokedAt: null,
       },
       data: {
         revokedAt: new Date(),
+        revocationReason: reason ?? null,
+      },
+    });
+  }
+
+  async createLoginEvent(payload: {
+    userId?: string | null;
+    organizationId?: string | null;
+    email: string;
+    status: 'SUCCESS' | 'FAILED' | 'BLOCKED' | 'LOGOUT' | 'REFRESH' | 'SESSION_REVOKED';
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    failureReason?: string | null;
+  }): Promise<void> {
+    await ((this.prisma as never as { userLoginEvent: { create(args: unknown): Promise<unknown> } }).userLoginEvent).create({
+      data: {
+        userId: payload.userId ?? null,
+        organizationId: payload.organizationId ?? null,
+        email: payload.email,
+        status: payload.status,
+        ipAddress: payload.ipAddress ?? null,
+        userAgent: payload.userAgent ?? null,
+        failureReason: payload.failureReason ?? null,
+      },
+    });
+  }
+
+  async countRecentFailedLoginEvents(email: string, since: Date): Promise<number> {
+    return ((this.prisma as never as { userLoginEvent: { count(args: unknown): Promise<number> } }).userLoginEvent).count({
+      where: {
+        email,
+        status: { in: ['FAILED', 'BLOCKED'] },
+        createdAt: { gte: since },
+      },
+    });
+  }
+
+  async findRecentLoginEventsByUserId(
+    userId: string,
+    limit: number,
+  ): Promise<Array<{
+    id: string;
+    email: string;
+    status: 'SUCCESS' | 'FAILED' | 'BLOCKED' | 'LOGOUT' | 'REFRESH' | 'SESSION_REVOKED';
+    ipAddress: string | null;
+    userAgent: string | null;
+    failureReason: string | null;
+    createdAt: Date;
+  }>> {
+    return ((this.prisma as never as { userLoginEvent: { findMany(args: unknown): Promise<Array<{
+      id: string;
+      email: string;
+      status: 'SUCCESS' | 'FAILED' | 'BLOCKED' | 'LOGOUT' | 'REFRESH' | 'SESSION_REVOKED';
+      ipAddress: string | null;
+      userAgent: string | null;
+      failureReason: string | null;
+      createdAt: Date;
+    }>> } }).userLoginEvent).findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        email: true,
+        status: true,
+        ipAddress: true,
+        userAgent: true,
+        failureReason: true,
+        createdAt: true,
       },
     });
   }

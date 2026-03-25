@@ -19,4 +19,9 @@ export const envValidationSchema = Joi.object({
   SMTP_FROM_EMAIL: Joi.string().allow('').default(''),
   SMTP_FROM_NAME: Joi.string().allow('').default('EduFlow'),
   WHATSAPP_CALLMEBOT_API_KEY: Joi.string().allow('').default(''),
+  GOOGLE_WORKSPACE_CLIENT_EMAIL: Joi.string().allow('').default(''),
+  GOOGLE_WORKSPACE_PRIVATE_KEY: Joi.string().allow('').default(''),
+  GOOGLE_WORKSPACE_PROJECT_ID: Joi.string().allow('').default(''),
+  GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL: Joi.string().allow('').default(''),
+  GOOGLE_WORKSPACE_DEFAULT_CALENDAR_ID: Joi.string().allow('').default('primary'),
 });

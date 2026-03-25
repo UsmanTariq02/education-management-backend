@@ -23,9 +23,6 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed"
   },
-  "prisma": {
-    "seed": "node dist/prisma/seed.js"
-  },
   "dependencies": {
     "@nestjs/common": "^11.0.11",
     "@nestjs/config": "^4.0.2",

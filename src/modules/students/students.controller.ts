@@ -25,6 +25,7 @@ import { OrganizationModule } from '../../common/enums/organization-module.enum'
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
+import { UpsertPortalAccessDto } from './dto/upsert-portal-access.dto';
 import { StudentsService } from './students.service';
 
 @ApiTags('Students')
@@ -101,6 +102,24 @@ export class StudentsController {
   @ApiOperation({ summary: 'Get student details' })
   async findOne(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext) {
     return this.studentsService.findOne(id, actor);
+  }
+
+  @Get(':id/portal-access')
+  @Permissions('portal-access.read')
+  @ApiOperation({ summary: 'Get student and parent portal access status' })
+  async getPortalAccess(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext) {
+    return this.studentsService.getPortalAccess(id, actor);
+  }
+
+  @Post(':id/portal-access')
+  @Permissions('portal-access.manage')
+  @ApiOperation({ summary: 'Create or update student and parent portal access' })
+  async upsertPortalAccess(
+    @Param('id') id: string,
+    @Body() payload: UpsertPortalAccessDto,
+    @CurrentUser() actor: CurrentUserContext,
+  ) {
+    return this.studentsService.upsertPortalAccess(id, payload, actor);
   }
 
   @Patch(':id')

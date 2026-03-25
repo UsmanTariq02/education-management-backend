@@ -8,42 +8,61 @@ datasource db {
 }
 
 model Organization {
-  id          String      @id @default(uuid()) @db.Uuid
-  name        String      @db.VarChar(150)
-  slug        String      @unique @db.VarChar(100)
-  email       String?     @db.VarChar(255)
-  phone       String?     @db.VarChar(30)
-  address     String?     @db.Text
-  isActive    Boolean     @default(true)
-  userLimit   Int         @default(10)
-  studentLimit Int        @default(500)
-  enabledModules OrganizationModule[] @default([USERS, STUDENTS, BATCHES, FEES, ATTENDANCE, REMINDERS, REPORTS, ACTIVITY_LOGS, SETTINGS])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  users       User[]
-  students    Student[]
-  batches     Batch[]
-  feePlans    FeePlan[]
-  feeRecords  FeeRecord[]
-  attendances Attendance[]
-  reminders   ReminderLog[]
-  reminderTemplates ReminderTemplate[]
-  reminderRules ReminderRule[]
-  reminderSchedules ReminderSchedule[]
-  reminderProviderSetting ReminderProviderSetting?
-  auditLogs   AuditLog[]
+  id                             String                          @id @default(uuid()) @db.Uuid
+  name                           String                          @db.VarChar(150)
+  slug                           String                          @unique @db.VarChar(100)
+  email                          String?                         @db.VarChar(255)
+  phone                          String?                         @db.VarChar(30)
+  address                        String?                         @db.Text
+  isActive                       Boolean                         @default(true)
+  userLimit                      Int                             @default(10)
+  studentLimit                   Int                             @default(500)
+  enabledModules                 OrganizationModule[]            @default([USERS, STUDENTS, PORTALS, BATCHES, ACADEMICS, FEES, ATTENDANCE, REMINDERS, REPORTS, ACTIVITY_LOGS, SETTINGS, MEDIA])
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  users                          User[]
+  students                       Student[]
+  batches                        Batch[]
+  academicSessions               AcademicSession[]
+  subjects                       Subject[]
+  teachers                       Teacher[]
+  batchSubjectAssignments        BatchSubjectAssignment[]
+  timetableEntries               TimetableEntry[]
+  exams                          Exam[]
+  studentExamResults             StudentExamResult[]
+  studentExamResultItems         StudentExamResultItem[]
+  portalAccounts                 PortalAccount[]
+  studentDocuments               StudentDocument[]
+  organizationAssets             OrganizationAsset[]
+  feePlans                       FeePlan[]
+  feeRecords                     FeeRecord[]
+  attendances                    Attendance[]
+  reminders                      ReminderLog[]
+  reminderTemplates              ReminderTemplate[]
+  reminderRules                  ReminderRule[]
+  reminderSchedules              ReminderSchedule[]
+  reminderProviderSetting        ReminderProviderSetting?
+  auditLogs                      AuditLog[]
+  loginEvents                    UserLoginEvent[]
+  onlineClassSessions            OnlineClassSession[]
+  onlineClassParticipantSessions OnlineClassParticipantSession[]
+  onlineClassProviderSetting     OnlineClassProviderSetting?
+  onlineClassAutomationRuns      OnlineClassAutomationRun[]
 }
 
 enum OrganizationModule {
   USERS
   STUDENTS
+  PORTALS
   BATCHES
+  ACADEMICS
   FEES
   ATTENDANCE
   REMINDERS
   REPORTS
   ACTIVITY_LOGS
   SETTINGS
+  MEDIA
 }
 
 enum ReminderAutomationTrigger {
@@ -123,21 +142,101 @@ enum ContactInquiryStatus {
   CONTACTED
 }
 
+enum TimetableDayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum ClassDeliveryMode {
+  OFFLINE
+  ONLINE
+  HYBRID
+}
+
+enum OnlineClassProvider {
+  GOOGLE_MEET
+  ZOOM
+}
+
+enum OnlineClassSessionStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum SyncJobStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum AttendanceSource {
+  MANUAL
+  ONLINE_CLASS
+}
+
+enum StudentExamResultStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum PortalAccountType {
+  STUDENT
+  PARENT
+}
+
+enum UserLoginEventStatus {
+  SUCCESS
+  FAILED
+  BLOCKED
+  LOGOUT
+  REFRESH
+  SESSION_REVOKED
+}
+
+enum StudentDocumentType {
+  ID_CARD
+  ADMISSION_FORM
+  BIRTH_CERTIFICATE
+  GUARDIAN_ID
+  ACADEMIC_RECORD
+  MEDICAL_RECORD
+  OTHER
+}
+
+enum OrganizationAssetType {
+  LOGO
+  LETTERHEAD
+  STAMP
+  BROCHURE
+  OTHER
+}
+
 model User {
-  id             String         @id @default(uuid()) @db.Uuid
-  organizationId String?        @db.Uuid
-  firstName      String         @db.VarChar(100)
-  lastName       String         @db.VarChar(100)
-  email          String         @unique @db.VarChar(255)
-  passwordHash   String         @db.VarChar(255)
-  isActive       Boolean        @default(true)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  userRoles      UserRole[]
-  refreshTokens  RefreshToken[]
-  sentReminders  ReminderLog[]
-  actorAuditLogs AuditLog[]
+  id                         String                     @id @default(uuid()) @db.Uuid
+  organizationId             String?                    @db.Uuid
+  firstName                  String                     @db.VarChar(100)
+  lastName                   String                     @db.VarChar(100)
+  email                      String                     @unique @db.VarChar(255)
+  passwordHash               String                     @db.VarChar(255)
+  isActive                   Boolean                    @default(true)
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  organization               Organization?              @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  userRoles                  UserRole[]
+  refreshTokens              RefreshToken[]
+  sentReminders              ReminderLog[]
+  actorAuditLogs             AuditLog[]
+  loginEvents                UserLoginEvent[]
+  onlineClassAutomationRuns  OnlineClassAutomationRun[]
+  studentDocumentsUploaded   StudentDocument[]
+  organizationAssetsUploaded OrganizationAsset[]
 
   @@index([email, isActive])
   @@index([organizationId, isActive])
@@ -185,58 +284,349 @@ model RolePermission {
 }
 
 model Student {
-  id            String          @id @default(uuid()) @db.Uuid
-  organizationId String         @db.Uuid
-  firstName     String          @db.VarChar(100)
-  lastName      String          @db.VarChar(100)
-  fullName      String          @db.VarChar(201)
-  email         String?         @db.VarChar(255)
-  phone         String          @db.VarChar(30)
-  guardianName  String          @db.VarChar(120)
-  guardianEmail String?         @db.VarChar(255)
-  guardianPhone String          @db.VarChar(30)
-  address       String?         @db.Text
-  dateOfBirth   DateTime?
-  admissionDate DateTime
-  status        StudentStatus   @default(ACTIVE)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  studentBatches StudentBatch[]
-  feePlans      FeePlan[]
-  feeRecords    FeeRecord[]
-  attendances   Attendance[]
-  reminderLogs  ReminderLog[]
-  reminderSchedules ReminderSchedule[]
+  id                             String                          @id @default(uuid()) @db.Uuid
+  organizationId                 String                          @db.Uuid
+  firstName                      String                          @db.VarChar(100)
+  lastName                       String                          @db.VarChar(100)
+  fullName                       String                          @db.VarChar(201)
+  email                          String?                         @db.VarChar(255)
+  phone                          String                          @db.VarChar(30)
+  guardianName                   String                          @db.VarChar(120)
+  guardianEmail                  String?                         @db.VarChar(255)
+  guardianPhone                  String                          @db.VarChar(30)
+  address                        String?                         @db.Text
+  dateOfBirth                    DateTime?
+  admissionDate                  DateTime
+  status                         StudentStatus                   @default(ACTIVE)
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  organization                   Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentBatches                 StudentBatch[]
+  feePlans                       FeePlan[]
+  feeRecords                     FeeRecord[]
+  attendances                    Attendance[]
+  reminderLogs                   ReminderLog[]
+  reminderSchedules              ReminderSchedule[]
+  examResults                    StudentExamResult[]
+  portalAccounts                 PortalAccount[]
+  documents                      StudentDocument[]
+  onlineClassParticipantSessions OnlineClassParticipantSession[]
 
+  @@unique([organizationId, email])
+  @@unique([organizationId, phone])
   @@index([fullName])
   @@index([status])
   @@index([organizationId, status])
-  @@unique([organizationId, email])
-  @@unique([organizationId, phone])
+}
+
+model PortalAccount {
+  id                    String            @id @default(uuid()) @db.Uuid
+  organizationId        String            @db.Uuid
+  studentId             String            @db.Uuid
+  type                  PortalAccountType
+  email                 String            @db.VarChar(255)
+  passwordHash          String            @db.VarChar(255)
+  isActive              Boolean           @default(true)
+  lastLoginAt           DateTime?
+  refreshTokenHash      String?           @db.VarChar(255)
+  refreshTokenExpiresAt DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  organization          Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student               Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, type])
+  @@unique([organizationId, email, type])
+  @@index([organizationId, type, isActive])
+  @@index([studentId, type])
+}
+
+model StudentDocument {
+  id               String              @id @default(uuid()) @db.Uuid
+  organizationId   String              @db.Uuid
+  studentId        String              @db.Uuid
+  uploadedByUserId String?             @db.Uuid
+  title            String              @db.VarChar(150)
+  type             StudentDocumentType
+  notes            String?             @db.Text
+  originalName     String              @db.VarChar(255)
+  mimeType         String              @db.VarChar(120)
+  sizeBytes        Int
+  storagePath      String              @db.VarChar(500)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student          Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  uploadedByUser   User?               @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, studentId, type])
+  @@index([uploadedByUserId])
+}
+
+model OrganizationAsset {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @db.Uuid
+  uploadedByUserId String?               @db.Uuid
+  title            String                @db.VarChar(150)
+  type             OrganizationAssetType
+  notes            String?               @db.Text
+  originalName     String                @db.VarChar(255)
+  mimeType         String                @db.VarChar(120)
+  sizeBytes        Int
+  storagePath      String                @db.VarChar(500)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadedByUser   User?                 @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, type])
+  @@index([uploadedByUserId])
 }
 
 model Batch {
-  id             String         @id @default(uuid()) @db.Uuid
-  organizationId String         @db.Uuid
-  name           String         @db.VarChar(120)
-  code           String         @db.VarChar(50)
-  description    String?        @db.Text
-  startDate      DateTime
-  endDate        DateTime?
-  scheduleInfo   String?        @db.Text
-  isActive       Boolean        @default(true)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  studentBatches StudentBatch[]
-  feePlans       FeePlan[]
-  feeRecords     FeeRecord[]
-  attendances    Attendance[]
+  id                  String                   @id @default(uuid()) @db.Uuid
+  organizationId      String                   @db.Uuid
+  name                String                   @db.VarChar(120)
+  code                String                   @db.VarChar(50)
+  description         String?                  @db.Text
+  startDate           DateTime
+  endDate             DateTime?
+  scheduleInfo        String?                  @db.Text
+  isActive            Boolean                  @default(true)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentBatches      StudentBatch[]
+  subjectAssignments  BatchSubjectAssignment[]
+  timetableEntries    TimetableEntry[]
+  onlineClassSessions OnlineClassSession[]
+  exams               Exam[]
+  examResults         StudentExamResult[]
+  feePlans            FeePlan[]
+  feeRecords          FeeRecord[]
+  attendances         Attendance[]
 
+  @@unique([organizationId, code])
   @@index([name, isActive])
   @@index([organizationId, isActive])
+}
+
+model AcademicSession {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  organizationId          String                   @db.Uuid
+  name                    String                   @db.VarChar(120)
+  code                    String                   @db.VarChar(50)
+  description             String?                  @db.Text
+  startDate               DateTime
+  endDate                 DateTime
+  isCurrent               Boolean                  @default(false)
+  isActive                Boolean                  @default(true)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batchSubjectAssignments BatchSubjectAssignment[]
+  timetableEntries        TimetableEntry[]
+  onlineClassSessions     OnlineClassSession[]
+  exams                   Exam[]
+  studentExamResults      StudentExamResult[]
+
   @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@index([organizationId, isCurrent])
+}
+
+model Subject {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  organizationId      String                   @db.Uuid
+  name                String                   @db.VarChar(120)
+  code                String                   @db.VarChar(50)
+  description         String?                  @db.Text
+  isActive            Boolean                  @default(true)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batchAssignments    BatchSubjectAssignment[]
+  timetableEntries    TimetableEntry[]
+  onlineClassSessions OnlineClassSession[]
+  examSubjects        ExamSubject[]
+  resultItems         StudentExamResultItem[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, isActive])
+  @@index([organizationId, name])
+}
+
+model Teacher {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  organizationId      String                   @db.Uuid
+  employeeId          String                   @db.VarChar(50)
+  firstName           String                   @db.VarChar(100)
+  lastName            String                   @db.VarChar(100)
+  fullName            String                   @db.VarChar(201)
+  email               String?                  @db.VarChar(255)
+  phone               String                   @db.VarChar(30)
+  qualification       String?                  @db.VarChar(150)
+  specialization      String?                  @db.VarChar(150)
+  joinedAt            DateTime
+  isActive            Boolean                  @default(true)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batchAssignments    BatchSubjectAssignment[]
+  timetableEntries    TimetableEntry[]
+  onlineClassSessions OnlineClassSession[]
+  exams               Exam[]
+
+  @@unique([organizationId, employeeId])
+  @@unique([organizationId, email])
+  @@index([organizationId, isActive])
+  @@index([organizationId, fullName])
+}
+
+model BatchSubjectAssignment {
+  id                String           @id @default(uuid()) @db.Uuid
+  organizationId    String           @db.Uuid
+  academicSessionId String?          @db.Uuid
+  batchId           String           @db.Uuid
+  subjectId         String           @db.Uuid
+  teacherId         String?          @db.Uuid
+  weeklyClasses     Int              @default(1)
+  isPrimary         Boolean          @default(false)
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  academicSession   AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  batch             Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject           Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher           Teacher?         @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  @@unique([batchId, subjectId, academicSessionId])
+  @@index([organizationId, isActive])
+  @@index([batchId, isActive])
+  @@index([teacherId, isActive])
+}
+
+model TimetableEntry {
+  id                             String               @id @default(uuid()) @db.Uuid
+  organizationId                 String               @db.Uuid
+  academicSessionId              String?              @db.Uuid
+  batchId                        String               @db.Uuid
+  subjectId                      String               @db.Uuid
+  teacherId                      String?              @db.Uuid
+  dayOfWeek                      TimetableDayOfWeek
+  startTime                      String               @db.VarChar(5)
+  endTime                        String               @db.VarChar(5)
+  deliveryMode                   ClassDeliveryMode    @default(OFFLINE)
+  onlineClassProvider            OnlineClassProvider?
+  onlineMeetingUrl               String?              @db.VarChar(500)
+  onlineMeetingCode              String?              @db.VarChar(120)
+  externalCalendarEventId        String?              @db.VarChar(255)
+  autoAttendanceEnabled          Boolean              @default(false)
+  attendanceJoinThresholdMinutes Int                  @default(5)
+  room                           String?              @db.VarChar(80)
+  notes                          String?              @db.Text
+  isActive                       Boolean              @default(true)
+  createdAt                      DateTime             @default(now())
+  updatedAt                      DateTime             @updatedAt
+  organization                   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  academicSession                AcademicSession?     @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  batch                          Batch                @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject                        Subject              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher                        Teacher?             @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  onlineClassSessions            OnlineClassSession[]
+
+  @@index([organizationId, dayOfWeek, isActive])
+  @@index([batchId, dayOfWeek, startTime])
+  @@index([teacherId, dayOfWeek, startTime])
+}
+
+model Exam {
+  id                String              @id @default(uuid()) @db.Uuid
+  organizationId    String              @db.Uuid
+  academicSessionId String?             @db.Uuid
+  batchId           String              @db.Uuid
+  teacherId         String?             @db.Uuid
+  name              String              @db.VarChar(150)
+  code              String              @db.VarChar(60)
+  description       String?             @db.Text
+  examDate          DateTime
+  isPublished       Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  academicSession   AcademicSession?    @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  batch             Batch               @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  teacher           Teacher?            @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  examSubjects      ExamSubject[]
+  studentResults    StudentExamResult[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, examDate])
+  @@index([batchId, examDate])
+}
+
+model ExamSubject {
+  id          String                  @id @default(uuid()) @db.Uuid
+  examId      String                  @db.Uuid
+  subjectId   String                  @db.Uuid
+  totalMarks  Decimal                 @db.Decimal(8, 2)
+  passMarks   Decimal                 @db.Decimal(8, 2)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  exam        Exam                    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subject     Subject                 @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  resultItems StudentExamResultItem[]
+
+  @@unique([examId, subjectId])
+  @@index([subjectId])
+}
+
+model StudentExamResult {
+  id                String                  @id @default(uuid()) @db.Uuid
+  organizationId    String                  @db.Uuid
+  academicSessionId String?                 @db.Uuid
+  examId            String                  @db.Uuid
+  studentId         String                  @db.Uuid
+  batchId           String                  @db.Uuid
+  totalObtained     Decimal                 @default(0) @db.Decimal(10, 2)
+  percentage        Decimal                 @default(0) @db.Decimal(5, 2)
+  grade             String?                 @db.VarChar(20)
+  remarks           String?                 @db.Text
+  status            StudentExamResultStatus @default(DRAFT)
+  publishedAt       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  academicSession   AcademicSession?        @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  exam              Exam                    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student           Student                 @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch             Batch                   @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  resultItems       StudentExamResultItem[]
+
+  @@unique([examId, studentId])
+  @@index([organizationId, status])
+  @@index([batchId, status])
+}
+
+model StudentExamResultItem {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  resultId       String            @db.Uuid
+  examSubjectId  String            @db.Uuid
+  subjectId      String            @db.Uuid
+  obtainedMarks  Decimal           @default(0) @db.Decimal(8, 2)
+  grade          String?           @db.VarChar(20)
+  remarks        String?           @db.Text
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  result         StudentExamResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  examSubject    ExamSubject       @relation(fields: [examSubjectId], references: [id], onDelete: Cascade)
+  subject        Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([resultId, examSubjectId])
+  @@index([organizationId, subjectId])
 }
 
 model StudentBatch {
@@ -252,19 +642,19 @@ model StudentBatch {
 }
 
 model FeePlan {
-  id         String      @id @default(uuid()) @db.Uuid
-  organizationId String  @db.Uuid
-  studentId  String      @db.Uuid
-  batchId    String?     @db.Uuid
-  monthlyFee Decimal     @db.Decimal(12, 2)
-  dueDay     Int
-  isActive   Boolean     @default(true)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  student    Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  batch      Batch?      @relation(fields: [batchId], references: [id], onDelete: SetNull)
-  feeRecords FeeRecord[]
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  studentId      String       @db.Uuid
+  batchId        String?      @db.Uuid
+  monthlyFee     Decimal      @db.Decimal(12, 2)
+  dueDay         Int
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch          Batch?       @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  feeRecords     FeeRecord[]
 
   @@index([studentId, isActive])
   @@index([batchId])
@@ -272,26 +662,26 @@ model FeePlan {
 }
 
 model FeeRecord {
-  id            String          @id @default(uuid()) @db.Uuid
-  organizationId String         @db.Uuid
-  studentId     String          @db.Uuid
-  batchId       String?         @db.Uuid
-  feePlanId     String          @db.Uuid
-  month         Int
-  year          Int
-  amountDue     Decimal         @db.Decimal(12, 2)
-  amountPaid    Decimal         @default(0) @db.Decimal(12, 2)
-  status        FeeRecordStatus @default(PENDING)
-  paidAt        DateTime?
-  paymentMethod PaymentMethod?
-  remarks       String?         @db.Text
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  student       Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  batch         Batch?          @relation(fields: [batchId], references: [id], onDelete: SetNull)
-  feePlan       FeePlan         @relation(fields: [feePlanId], references: [id], onDelete: Cascade)
-  reminderLogs  ReminderLog[]
+  id                String             @id @default(uuid()) @db.Uuid
+  organizationId    String             @db.Uuid
+  studentId         String             @db.Uuid
+  batchId           String?            @db.Uuid
+  feePlanId         String             @db.Uuid
+  month             Int
+  year              Int
+  amountDue         Decimal            @db.Decimal(12, 2)
+  amountPaid        Decimal            @default(0) @db.Decimal(12, 2)
+  status            FeeRecordStatus    @default(PENDING)
+  paidAt            DateTime?
+  paymentMethod     PaymentMethod?
+  remarks           String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student           Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch             Batch?             @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  feePlan           FeePlan            @relation(fields: [feePlanId], references: [id], onDelete: Cascade)
+  reminderLogs      ReminderLog[]
   reminderSchedules ReminderSchedule[]
 
   @@unique([studentId, feePlanId, month, year])
@@ -300,43 +690,147 @@ model FeeRecord {
 }
 
 model Attendance {
-  id             String           @id @default(uuid()) @db.Uuid
-  organizationId String           @db.Uuid
-  studentId      String           @db.Uuid
-  batchId        String           @db.Uuid
-  attendanceDate DateTime
-  status         AttendanceStatus
-  remarks        String?          @db.Text
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  student        Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  batch          Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  id                   String              @id @default(uuid()) @db.Uuid
+  organizationId       String              @db.Uuid
+  studentId            String              @db.Uuid
+  batchId              String              @db.Uuid
+  attendanceDate       DateTime
+  status               AttendanceStatus
+  source               AttendanceSource    @default(MANUAL)
+  onlineClassSessionId String?             @db.Uuid
+  remarks              String?             @db.Text
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student              Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch                Batch               @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  onlineClassSession   OnlineClassSession? @relation(fields: [onlineClassSessionId], references: [id], onDelete: SetNull)
 
   @@unique([studentId, batchId, attendanceDate])
   @@index([batchId, attendanceDate])
   @@index([organizationId, attendanceDate])
+  @@index([onlineClassSessionId])
+}
+
+model OnlineClassSession {
+  id                           String                          @id @default(uuid()) @db.Uuid
+  organizationId               String                          @db.Uuid
+  timetableEntryId             String                          @db.Uuid
+  academicSessionId            String?                         @db.Uuid
+  batchId                      String                          @db.Uuid
+  subjectId                    String                          @db.Uuid
+  teacherId                    String?                         @db.Uuid
+  provider                     OnlineClassProvider
+  status                       OnlineClassSessionStatus        @default(SCHEDULED)
+  scheduledStartAt             DateTime
+  scheduledEndAt               DateTime
+  actualStartAt                DateTime?
+  actualEndAt                  DateTime?
+  meetingUrl                   String?                         @db.VarChar(500)
+  meetingCode                  String?                         @db.VarChar(120)
+  externalCalendarEventId      String?                         @db.VarChar(255)
+  externalSpaceId              String?                         @db.VarChar(255)
+  externalConferenceRecordId   String?                         @db.VarChar(255)
+  lastParticipantSyncAt        DateTime?
+  lastParticipantSyncStatus    SyncJobStatus                   @default(PENDING)
+  lastParticipantSyncError     String?                         @db.Text
+  syncFailureAlertSentAt       DateTime?
+  pendingAttendanceAlertSentAt DateTime?
+  attendanceProcessedAt        DateTime?
+  createdAt                    DateTime                        @default(now())
+  updatedAt                    DateTime                        @updatedAt
+  organization                 Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  timetableEntry               TimetableEntry                  @relation(fields: [timetableEntryId], references: [id], onDelete: Cascade)
+  academicSession              AcademicSession?                @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  batch                        Batch                           @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject                      Subject                         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher                      Teacher?                        @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  participantSessions          OnlineClassParticipantSession[]
+  attendanceRecords            Attendance[]
+
+  @@index([organizationId, status, scheduledStartAt])
+  @@index([timetableEntryId, scheduledStartAt])
+  @@index([batchId, scheduledStartAt])
+  @@index([lastParticipantSyncStatus, scheduledStartAt])
+}
+
+model OnlineClassParticipantSession {
+  id                    String             @id @default(uuid()) @db.Uuid
+  organizationId        String             @db.Uuid
+  onlineClassSessionId  String             @db.Uuid
+  studentId             String?            @db.Uuid
+  participantEmail      String?            @db.VarChar(255)
+  participantName       String?            @db.VarChar(150)
+  externalParticipantId String?            @db.VarChar(255)
+  joinedAt              DateTime
+  leftAt                DateTime?
+  totalMinutes          Int                @default(0)
+  attendanceMarked      Boolean            @default(false)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  organization          Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  onlineClassSession    OnlineClassSession @relation(fields: [onlineClassSessionId], references: [id], onDelete: Cascade)
+  student               Student?           @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, joinedAt])
+  @@index([onlineClassSessionId, joinedAt])
+  @@index([studentId, joinedAt])
+  @@index([participantEmail])
+}
+
+model OnlineClassProviderSetting {
+  id                    String              @id @default(uuid()) @db.Uuid
+  organizationId        String              @unique @db.Uuid
+  provider              OnlineClassProvider @default(GOOGLE_MEET)
+  integrationEnabled    Boolean             @default(false)
+  autoCreateMeetLinks   Boolean             @default(false)
+  autoSyncParticipants  Boolean             @default(false)
+  calendarId            String?             @db.VarChar(255)
+  impersonatedUserEmail String?             @db.VarChar(255)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model OnlineClassAutomationRun {
+  id                       String        @id @default(uuid()) @db.Uuid
+  organizationId           String?       @db.Uuid
+  triggeredByUserId        String?       @db.Uuid
+  status                   SyncJobStatus @default(PENDING)
+  generatedCount           Int           @default(0)
+  syncedCount              Int           @default(0)
+  attendanceProcessedCount Int           @default(0)
+  errorMessage             String?       @db.Text
+  startedAt                DateTime      @default(now())
+  completedAt              DateTime?
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+  organization             Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  triggeredByUser          User?         @relation(fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, startedAt])
+  @@index([organizationId, startedAt])
 }
 
 model ReminderLog {
-  id           String          @id @default(uuid()) @db.Uuid
-  organizationId String        @db.Uuid
-  studentId    String          @db.Uuid
-  feeRecordId  String?         @db.Uuid
-  channel      ReminderChannel
-  message      String          @db.Text
-  sentByUserId String?         @db.Uuid
-  sentAt       DateTime?
-  status       ReminderStatus  @default(PENDING)
-  deliveryReference String?    @db.VarChar(255)
-  failureReason     String?    @db.Text
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  student      Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  feeRecord    FeeRecord?      @relation(fields: [feeRecordId], references: [id], onDelete: SetNull)
-  sentByUser   User?           @relation(fields: [sentByUserId], references: [id], onDelete: SetNull)
-  reminderSchedule ReminderSchedule?
+  id                String            @id @default(uuid()) @db.Uuid
+  organizationId    String            @db.Uuid
+  studentId         String            @db.Uuid
+  feeRecordId       String?           @db.Uuid
+  channel           ReminderChannel
+  message           String            @db.Text
+  sentByUserId      String?           @db.Uuid
+  sentAt            DateTime?
+  status            ReminderStatus    @default(PENDING)
+  deliveryReference String?           @db.VarChar(255)
+  failureReason     String?           @db.Text
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  student           Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeRecord         FeeRecord?        @relation(fields: [feeRecordId], references: [id], onDelete: SetNull)
+  sentByUser        User?             @relation(fields: [sentByUserId], references: [id], onDelete: SetNull)
+  reminderSchedule  ReminderSchedule?
 
   @@index([studentId, status])
   @@index([feeRecordId])
@@ -364,74 +858,74 @@ model ReminderTemplate {
 }
 
 model ReminderRule {
-  id              String                    @id @default(uuid()) @db.Uuid
-  organizationId  String                    @db.Uuid
-  templateId      String                    @db.Uuid
-  name            String                    @db.VarChar(150)
-  trigger         ReminderAutomationTrigger
-  offsetDays      Int                       @default(0)
-  isActive        Boolean                   @default(true)
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
-  organization    Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  template        ReminderTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  schedules       ReminderSchedule[]
+  id             String                    @id @default(uuid()) @db.Uuid
+  organizationId String                    @db.Uuid
+  templateId     String                    @db.Uuid
+  name           String                    @db.VarChar(150)
+  trigger        ReminderAutomationTrigger
+  offsetDays     Int                       @default(0)
+  isActive       Boolean                   @default(true)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  template       ReminderTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  schedules      ReminderSchedule[]
 
   @@index([organizationId, trigger, isActive])
 }
 
 model ReminderSchedule {
-  id               String                @id @default(uuid()) @db.Uuid
-  organizationId   String                @db.Uuid
-  ruleId           String                @db.Uuid
-  templateId       String                @db.Uuid
-  studentId        String                @db.Uuid
-  feeRecordId      String?               @db.Uuid
-  reminderLogId    String?               @unique @db.Uuid
-  scheduledFor     DateTime
-  processedAt      DateTime?
-  cancelledAt      DateTime?
-  status           ReminderScheduleStatus @default(PENDING)
-  failureReason    String?               @db.Text
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  rule             ReminderRule          @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  template         ReminderTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  student          Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  feeRecord        FeeRecord?            @relation(fields: [feeRecordId], references: [id], onDelete: SetNull)
-  reminderLog      ReminderLog?          @relation(fields: [reminderLogId], references: [id], onDelete: SetNull)
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @db.Uuid
+  ruleId         String                 @db.Uuid
+  templateId     String                 @db.Uuid
+  studentId      String                 @db.Uuid
+  feeRecordId    String?                @db.Uuid
+  reminderLogId  String?                @unique @db.Uuid
+  scheduledFor   DateTime
+  processedAt    DateTime?
+  cancelledAt    DateTime?
+  status         ReminderScheduleStatus @default(PENDING)
+  failureReason  String?                @db.Text
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rule           ReminderRule           @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  template       ReminderTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  student        Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeRecord      FeeRecord?             @relation(fields: [feeRecordId], references: [id], onDelete: SetNull)
+  reminderLog    ReminderLog?           @relation(fields: [reminderLogId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, ruleId, studentId, feeRecordId])
   @@index([organizationId, status, scheduledFor])
 }
 
 model ReminderProviderSetting {
-  id                     String       @id @default(uuid()) @db.Uuid
-  organizationId         String       @unique @db.Uuid
-  autoRemindersEnabled   Boolean      @default(false)
-  emailEnabled           Boolean      @default(false)
-  whatsappEnabled        Boolean      @default(false)
-  smsEnabled             Boolean      @default(false)
-  paymentConfirmationEnabled Boolean   @default(false)
-  senderName             String?      @db.VarChar(150)
-  replyToEmail           String?      @db.VarChar(255)
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
-  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                         String       @id @default(uuid()) @db.Uuid
+  organizationId             String       @unique @db.Uuid
+  autoRemindersEnabled       Boolean      @default(false)
+  emailEnabled               Boolean      @default(false)
+  whatsappEnabled            Boolean      @default(false)
+  smsEnabled                 Boolean      @default(false)
+  paymentConfirmationEnabled Boolean      @default(false)
+  senderName                 String?      @db.VarChar(150)
+  replyToEmail               String?      @db.VarChar(255)
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+  organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model AuditLog {
-  id          String   @id @default(uuid()) @db.Uuid
-  organizationId String? @db.Uuid
-  actorUserId String?  @db.Uuid
-  module      String   @db.VarChar(100)
-  action      String   @db.VarChar(100)
-  targetId    String?  @db.VarChar(100)
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  actorUser   User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @db.Uuid
+  actorUserId    String?       @db.Uuid
+  module         String        @db.VarChar(100)
+  action         String        @db.VarChar(100)
+  targetId       String?       @db.VarChar(100)
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actorUser      User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([module, action])
   @@index([actorUserId, createdAt])
@@ -459,13 +953,37 @@ model ContactInquiry {
 }
 
 model RefreshToken {
-  id         String    @id @default(uuid()) @db.Uuid
-  userId     String    @db.Uuid
-  tokenHash  String    @db.VarChar(255)
-  expiresAt  DateTime
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  tokenHash        String    @db.VarChar(255)
+  userAgent        String?   @db.VarChar(255)
+  ipAddress        String?   @db.VarChar(80)
+  lastUsedAt       DateTime?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revocationReason String?   @db.VarChar(120)
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
+  @@index([userId, revokedAt, createdAt])
+}
+
+model UserLoginEvent {
+  id             String               @id @default(uuid()) @db.Uuid
+  userId         String?              @db.Uuid
+  organizationId String?              @db.Uuid
+  email          String               @db.VarChar(255)
+  status         UserLoginEventStatus
+  ipAddress      String?              @db.VarChar(80)
+  userAgent      String?              @db.VarChar(255)
+  failureReason  String?              @db.VarChar(120)
+  createdAt      DateTime             @default(now())
+  user           User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+  @@index([userId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
 }

@@ -3,18 +3,23 @@ import { AttendanceStatus, FeeRecordStatus, StudentStatus } from '@prisma/client
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
+  AcademicDashboardSummary,
   AttendanceBatchPoint,
   AttendanceDailyTrendPoint,
   BatchCollectionPoint,
+  BatchPerformancePoint,
   BatchStatusPoint,
+  ExamSchedulePoint,
   FeeCollectionComparisonPoint,
   FeeCollectionOverview,
   FeeCollectionPeriodSummary,
   FeeCollectionTrendPoint,
   FeeStatusPoint,
+  GradeDistributionPoint,
   ReminderDailyTrendPoint,
   ReminderChannelPoint,
   ReportRepository,
+  ResultStatusPoint,
   AttendanceStatusPoint,
   EnrollmentTrendPoint,
   ReminderStatusPoint,
@@ -494,6 +499,107 @@ export class ReportPrismaRepository implements ReportRepository {
       { status: 'ACTIVE', total: active },
       { status: 'INACTIVE', total: inactive },
     ];
+  }
+
+  async getAcademicDashboardSummary(organizationId?: string): Promise<AcademicDashboardSummary> {
+    const [totalExams, publishedExams, totalResults, publishedResults, averageAggregate] = await this.prisma.$transaction([
+      this.prisma.exam.count({ where: organizationId ? { organizationId } : undefined }),
+      this.prisma.exam.count({ where: organizationId ? { organizationId, isPublished: true } : { isPublished: true } }),
+      this.prisma.studentExamResult.count({ where: organizationId ? { organizationId } : undefined }),
+      this.prisma.studentExamResult.count({
+        where: organizationId ? { organizationId, status: 'PUBLISHED' } : { status: 'PUBLISHED' },
+      }),
+      this.prisma.studentExamResult.aggregate({
+        _avg: { percentage: true },
+        where: organizationId ? { organizationId } : undefined,
+      }),
+    ]);
+
+    return {
+      totalExams,
+      publishedExams,
+      totalResults,
+      publishedResults,
+      averagePercentage: Number(averageAggregate._avg.percentage ?? 0),
+    };
+  }
+
+  async getGradeDistribution(organizationId?: string): Promise<GradeDistributionPoint[]> {
+    const rows = await this.prisma.studentExamResult.groupBy({
+      by: ['grade'],
+      _count: { grade: true },
+      where: organizationId ? { organizationId } : undefined,
+      orderBy: { grade: 'asc' },
+    });
+
+    return rows.map((row) => ({
+      grade: row.grade ?? 'N/A',
+      total: row._count.grade,
+    }));
+  }
+
+  async getExamScheduleTrend(limit: number, organizationId?: string): Promise<ExamSchedulePoint[]> {
+    const organizationFilter = organizationId
+      ? Prisma.sql`WHERE "organizationId" = ${organizationId}`
+      : Prisma.empty;
+
+    const rows = await this.prisma.$queryRaw<Array<{ month: Date; count: bigint }>>(Prisma.sql`
+      SELECT date_trunc('month', "examDate") AS month, COUNT(*)::bigint AS count
+      FROM "Exam"
+      ${organizationFilter}
+      GROUP BY date_trunc('month', "examDate")
+      ORDER BY month DESC
+      LIMIT ${limit}
+    `);
+
+    return rows
+      .map((row) => ({
+        month: row.month.toISOString().slice(0, 7),
+        count: Number(row.count),
+      }))
+      .reverse();
+  }
+
+  async getBatchPerformance(organizationId?: string): Promise<BatchPerformancePoint[]> {
+    const grouped = await this.prisma.studentExamResult.groupBy({
+      by: ['batchId'],
+      _avg: { percentage: true },
+      where: organizationId ? { organizationId } : undefined,
+    });
+
+    const batches = await this.prisma.batch.findMany({
+      where: {
+        id: { in: grouped.map((item) => item.batchId) },
+        organizationId: organizationId ?? undefined,
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+      },
+    });
+    const batchMap = new Map(batches.map((batch) => [batch.id, batch]));
+
+    return grouped.map((row) => ({
+      batchId: row.batchId,
+      batchName: batchMap.get(row.batchId)?.name ?? row.batchId,
+      batchCode: batchMap.get(row.batchId)?.code ?? row.batchId.slice(0, 8),
+      averagePercentage: Number(row._avg.percentage ?? 0),
+    }));
+  }
+
+  async getResultStatusSummary(organizationId?: string): Promise<ResultStatusPoint[]> {
+    const rows = await this.prisma.studentExamResult.groupBy({
+      by: ['status'],
+      _count: { status: true },
+      where: organizationId ? { organizationId } : undefined,
+      orderBy: { status: 'asc' },
+    });
+
+    return rows.map((row) => ({
+      status: row.status,
+      total: row._count.status,
+    }));
   }
 
   private getMonthPeriod(year: number, month: number, label: string) {

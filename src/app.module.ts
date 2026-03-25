@@ -14,11 +14,19 @@ import { ApiResponseInterceptor } from './common/interceptors/api-response.inter
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { PortalAuthModule } from './modules/portal-auth/portal-auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { StudentsModule } from './modules/students/students.module';
 import { BatchesModule } from './modules/batches/batches.module';
+import { AcademicSessionsModule } from './modules/academic-sessions/academic-sessions.module';
+import { SubjectsModule } from './modules/subjects/subjects.module';
+import { TeachersModule } from './modules/teachers/teachers.module';
+import { BatchSubjectAssignmentsModule } from './modules/batch-subject-assignments/batch-subject-assignments.module';
+import { TimetablesModule } from './modules/timetables/timetables.module';
+import { ExamsModule } from './modules/exams/exams.module';
+import { ExamResultsModule } from './modules/exam-results/exam-results.module';
 import { FeesModule } from './modules/fees/fees.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
@@ -27,6 +35,8 @@ import { HealthModule } from './modules/health/health.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module';
 import { InquiriesModule } from './modules/inquiries/inquiries.module';
+import { PortalModule } from './modules/portal/portal.module';
+import { OnlineClassesModule } from './modules/online-classes/online-classes.module';
 
 @Module({
   imports: [
@@ -47,12 +57,20 @@ import { InquiriesModule } from './modules/inquiries/inquiries.module';
     CommonModule,
     PrismaModule,
     AuthModule,
+    PortalAuthModule,
     UsersModule,
     RolesModule,
     PermissionsModule,
     OrganizationsModule,
     StudentsModule,
     BatchesModule,
+    AcademicSessionsModule,
+    SubjectsModule,
+    TeachersModule,
+    BatchSubjectAssignmentsModule,
+    TimetablesModule,
+    ExamsModule,
+    ExamResultsModule,
     FeesModule,
     AttendanceModule,
     RemindersModule,
@@ -60,6 +78,8 @@ import { InquiriesModule } from './modules/inquiries/inquiries.module';
     HealthModule,
     ActivityLogsModule,
     InquiriesModule,
+    PortalModule,
+    OnlineClassesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

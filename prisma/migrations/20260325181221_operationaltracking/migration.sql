@@ -1,0 +1,3 @@
+-- No-op.
+-- This migration was generated from an intermediate local rename attempt and is intentionally empty
+-- to keep the migration chain stable across environments.

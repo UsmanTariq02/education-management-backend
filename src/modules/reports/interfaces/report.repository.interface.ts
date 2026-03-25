@@ -106,6 +106,36 @@ export interface FeeCollectionComparisonPoint {
   previousPending: number;
 }
 
+export interface AcademicDashboardSummary {
+  totalExams: number;
+  publishedExams: number;
+  totalResults: number;
+  publishedResults: number;
+  averagePercentage: number;
+}
+
+export interface GradeDistributionPoint {
+  grade: string;
+  total: number;
+}
+
+export interface ExamSchedulePoint {
+  month: string;
+  count: number;
+}
+
+export interface BatchPerformancePoint {
+  batchId: string;
+  batchName: string;
+  batchCode: string;
+  averagePercentage: number;
+}
+
+export interface ResultStatusPoint {
+  status: string;
+  total: number;
+}
+
 export interface ReportRepository {
   getDashboardSummary(organizationId?: string): Promise<{
     totalStudents: number;
@@ -131,4 +161,9 @@ export interface ReportRepository {
   getUserStatusSummary(organizationId?: string): Promise<UserStatusPoint[]>;
   getFeeCollectionOverview(organizationId?: string): Promise<FeeCollectionOverview>;
   getFeeCollectionComparison(organizationId?: string): Promise<FeeCollectionComparisonPoint[]>;
+  getAcademicDashboardSummary(organizationId?: string): Promise<AcademicDashboardSummary>;
+  getGradeDistribution(organizationId?: string): Promise<GradeDistributionPoint[]>;
+  getExamScheduleTrend(limit: number, organizationId?: string): Promise<ExamSchedulePoint[]>;
+  getBatchPerformance(organizationId?: string): Promise<BatchPerformancePoint[]>;
+  getResultStatusSummary(organizationId?: string): Promise<ResultStatusPoint[]>;
 }

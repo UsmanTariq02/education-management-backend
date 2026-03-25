@@ -27,6 +27,13 @@ export interface AppConfiguration {
     smtpFromName: string;
     whatsappCallmebotApiKey: string;
   };
+  googleWorkspace: {
+    clientEmail: string;
+    privateKey: string;
+    projectId: string;
+    delegatedAdminEmail: string;
+    defaultCalendarId: string;
+  };
 }
 
 export default (): AppConfiguration => ({
@@ -57,5 +64,12 @@ export default (): AppConfiguration => ({
     smtpFromEmail: process.env.SMTP_FROM_EMAIL ?? '',
     smtpFromName: process.env.SMTP_FROM_NAME ?? 'EduFlow',
     whatsappCallmebotApiKey: process.env.WHATSAPP_CALLMEBOT_API_KEY ?? '',
+  },
+  googleWorkspace: {
+    clientEmail: process.env.GOOGLE_WORKSPACE_CLIENT_EMAIL ?? '',
+    privateKey: process.env.GOOGLE_WORKSPACE_PRIVATE_KEY ?? '',
+    projectId: process.env.GOOGLE_WORKSPACE_PROJECT_ID ?? '',
+    delegatedAdminEmail: process.env.GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL ?? '',
+    defaultCalendarId: process.env.GOOGLE_WORKSPACE_DEFAULT_CALENDAR_ID ?? 'primary',
   },
 });

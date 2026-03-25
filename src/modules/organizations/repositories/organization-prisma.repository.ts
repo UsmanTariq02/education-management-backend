@@ -43,14 +43,30 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
   }
 
   async create(payload: CreateOrganizationDto): Promise<OrganizationSummary> {
-    const organization = await this.prisma.organization.create({ data: payload });
+    const { enabledModules, ...rest } = payload;
+    const data: Prisma.OrganizationUncheckedCreateInput = {
+      ...rest,
+      enabledModules: enabledModules as unknown as Prisma.OrganizationUncheckedCreateInput['enabledModules'],
+    };
+    const organization = await this.prisma.organization.create({
+      data,
+    });
     return this.enrichOrganization(organization);
   }
 
   async update(id: string, payload: UpdateOrganizationDto): Promise<OrganizationSummary> {
+    const { enabledModules, ...rest } = payload;
+    const data: Prisma.OrganizationUncheckedUpdateInput = {
+      ...rest,
+      ...(enabledModules
+        ? {
+            enabledModules: enabledModules as unknown as Prisma.OrganizationUncheckedUpdateInput['enabledModules'],
+          }
+        : {}),
+    };
     const organization = await this.prisma.organization.update({
       where: { id },
-      data: payload,
+      data,
     });
     return this.enrichOrganization(organization);
   }

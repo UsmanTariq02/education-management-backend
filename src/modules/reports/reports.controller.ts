@@ -133,6 +133,41 @@ export class ReportsController {
     return this.reportsService.getUserStatusSummary(actor);
   }
 
+  @Get('academics/summary')
+  @Permissions('reports.read')
+  @ApiOperation({ summary: 'Get academic operations summary for charts and stat cards' })
+  async academicSummary(@CurrentUser() actor: CurrentUserContext) {
+    return this.reportsService.getAcademicDashboardSummary(actor);
+  }
+
+  @Get('academics/grade-distribution')
+  @Permissions('reports.read')
+  @ApiOperation({ summary: 'Get grade distribution for charts' })
+  async gradeDistribution(@CurrentUser() actor: CurrentUserContext) {
+    return this.reportsService.getGradeDistribution(actor);
+  }
+
+  @Get('academics/exam-schedule-trend')
+  @Permissions('reports.read')
+  @ApiOperation({ summary: 'Get exam schedule trend for charts' })
+  async examScheduleTrend(@CurrentUser() actor: CurrentUserContext) {
+    return this.reportsService.getExamScheduleTrend(actor);
+  }
+
+  @Get('academics/batch-performance')
+  @Permissions('reports.read')
+  @ApiOperation({ summary: 'Get batch performance averages for charts' })
+  async batchPerformance(@CurrentUser() actor: CurrentUserContext) {
+    return this.reportsService.getBatchPerformance(actor);
+  }
+
+  @Get('academics/result-status')
+  @Permissions('reports.read')
+  @ApiOperation({ summary: 'Get exam result publication status summary for charts' })
+  async resultStatus(@CurrentUser() actor: CurrentUserContext) {
+    return this.reportsService.getResultStatusSummary(actor);
+  }
+
   @Get('batches/status-summary')
   @Permissions('reports.read')
   @ApiOperation({ summary: 'Get batch status summary for charts' })

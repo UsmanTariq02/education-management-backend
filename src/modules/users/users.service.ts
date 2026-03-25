@@ -186,11 +186,15 @@ export class UsersService {
 
   private getAssignableRoleNames(actor: CurrentUserContext): Set<string> {
     if (actor.roles.includes('SUPER_ADMIN')) {
-      return new Set(['SUPER_ADMIN', 'ADMIN', 'STAFF']);
+      return new Set(['SUPER_ADMIN', 'ADMIN', 'ACADEMIC_COORDINATOR', 'TEACHER', 'STAFF']);
     }
 
     if (actor.roles.includes('ADMIN')) {
-      return new Set(['ADMIN', 'STAFF']);
+      return new Set(['ADMIN', 'ACADEMIC_COORDINATOR', 'TEACHER', 'STAFF']);
+    }
+
+    if (actor.roles.includes('ACADEMIC_COORDINATOR')) {
+      return new Set(['TEACHER', 'STAFF']);
     }
 
     return new Set(['STAFF']);

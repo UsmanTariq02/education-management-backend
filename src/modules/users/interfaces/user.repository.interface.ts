@@ -30,8 +30,43 @@ export interface UserRepository {
   create(payload: CreateUserDto, passwordHash: string, organizationId: string | null): Promise<UserWithAuthorization>;
   update(id: string, payload: UpdateUserDto, organizationId?: string): Promise<UserWithAuthorization>;
   delete(id: string, organizationId?: string): Promise<void>;
-  storeRefreshToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void>;
-  findActiveRefreshTokenByUserId(userId: string): Promise<{ id: string; tokenHash: string } | null>;
-  revokeRefreshToken(tokenId: string): Promise<void>;
-  revokeActiveRefreshTokensByUserId(userId: string): Promise<void>;
+  storeRefreshToken(
+    sessionId: string,
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+    metadata?: { ipAddress?: string | null; userAgent?: string | null; lastUsedAt?: Date | null },
+  ): Promise<void>;
+  findActiveRefreshTokenById(tokenId: string, userId: string): Promise<{ id: string; tokenHash: string } | null>;
+  findActiveSessionsByUserId(userId: string): Promise<Array<{
+    id: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+    lastUsedAt: Date | null;
+    createdAt: Date;
+    expiresAt: Date;
+    revokedAt: Date | null;
+    revocationReason: string | null;
+  }>>;
+  revokeRefreshToken(tokenId: string, reason?: string): Promise<void>;
+  revokeActiveRefreshTokensByUserId(userId: string, reason?: string): Promise<void>;
+  createLoginEvent(payload: {
+    userId?: string | null;
+    organizationId?: string | null;
+    email: string;
+    status: 'SUCCESS' | 'FAILED' | 'BLOCKED' | 'LOGOUT' | 'REFRESH' | 'SESSION_REVOKED';
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    failureReason?: string | null;
+  }): Promise<void>;
+  countRecentFailedLoginEvents(email: string, since: Date): Promise<number>;
+  findRecentLoginEventsByUserId(userId: string, limit: number): Promise<Array<{
+    id: string;
+    email: string;
+    status: 'SUCCESS' | 'FAILED' | 'BLOCKED' | 'LOGOUT' | 'REFRESH' | 'SESSION_REVOKED';
+    ipAddress: string | null;
+    userAgent: string | null;
+    failureReason: string | null;
+    createdAt: Date;
+  }>>;
 }
