@@ -14,6 +14,8 @@ const authorizationInclude = {
       id: true,
       name: true,
       isActive: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
       userLimit: true,
       studentLimit: true,
       enabledModules: true,

@@ -15,6 +15,13 @@ model Organization {
   phone                          String?                         @db.VarChar(30)
   address                        String?                         @db.Text
   isActive                       Boolean                         @default(true)
+  subscriptionStatus             SubscriptionStatus              @default(TRIAL)
+  trialDays                      Int                             @default(14)
+  trialStartsAt                  DateTime                        @default(now())
+  trialEndsAt                    DateTime?
+  subscriptionStartsAt           DateTime?
+  subscriptionEndsAt             DateTime?
+  subscriptionNotes              String?                         @db.Text
   userLimit                      Int                             @default(10)
   studentLimit                   Int                             @default(500)
   enabledModules                 OrganizationModule[]            @default([USERS, STUDENTS, PORTALS, BATCHES, ACADEMICS, FEES, ATTENDANCE, REMINDERS, REPORTS, ACTIVITY_LOGS, SETTINGS, MEDIA])
@@ -48,6 +55,7 @@ model Organization {
   onlineClassParticipantSessions OnlineClassParticipantSession[]
   onlineClassProviderSetting     OnlineClassProviderSetting?
   onlineClassAutomationRuns      OnlineClassAutomationRun[]
+  billingEntries                 OrganizationBillingEntry[]
 }
 
 enum OrganizationModule {
@@ -63,6 +71,50 @@ enum OrganizationModule {
   ACTIVITY_LOGS
   SETTINGS
   MEDIA
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+enum BillingEntryType {
+  SUBSCRIPTION
+  TRIAL_EXTENSION
+  ADJUSTMENT
+  MANUAL_INVOICE
+}
+
+enum BillingEntryStatus {
+  OPEN
+  PAID
+  VOID
+}
+
+model OrganizationBillingEntry {
+  id                  String             @id @default(uuid()) @db.Uuid
+  organizationId      String             @db.Uuid
+  type                BillingEntryType
+  status              BillingEntryStatus @default(OPEN)
+  title               String             @db.VarChar(180)
+  description         String?            @db.Text
+  amount              Int
+  currency            String             @default("USD") @db.VarChar(10)
+  dueDate             DateTime?
+  entryDate           DateTime           @default(now())
+  periodStart         DateTime?
+  periodEnd           DateTime?
+  userCountSnapshot   Int?
+  moduleCountSnapshot Int?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entryDate])
+  @@index([organizationId, status])
 }
 
 enum ReminderAutomationTrigger {

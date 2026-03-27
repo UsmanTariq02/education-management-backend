@@ -9,6 +9,7 @@ export class OrganizationAccessService {
 
   async assertUserLimitNotReached(organizationId: string): Promise<void> {
     const organization = await this.getOrganizationConfiguration(organizationId);
+    this.assertOrganizationAccessibleConfiguration(organization);
     const totalUsers = await this.prisma.user.count({
       where: {
         organizationId,
@@ -22,6 +23,7 @@ export class OrganizationAccessService {
 
   async assertStudentLimitNotReached(organizationId: string, requestedCount = 1): Promise<void> {
     const organization = await this.getOrganizationConfiguration(organizationId);
+    this.assertOrganizationAccessibleConfiguration(organization);
     const totalStudents = await this.prisma.student.count({
       where: {
         organizationId,
@@ -35,6 +37,7 @@ export class OrganizationAccessService {
 
   async assertModuleEnabled(organizationId: string, module: OrganizationModule): Promise<void> {
     const organization = await this.getOrganizationConfiguration(organizationId);
+    this.assertOrganizationAccessibleConfiguration(organization);
 
     if (!organization.enabledModules.includes(module)) {
       throw new ForbiddenException(`${module} module is not enabled for this organization`);
@@ -43,6 +46,8 @@ export class OrganizationAccessService {
 
   async getOrganizationConfiguration(organizationId: string): Promise<{
     isActive: boolean;
+    subscriptionStatus: string;
+    trialEndsAt: Date | null;
     userLimit: number;
     studentLimit: number;
     enabledModules: OrganizationModule[];
@@ -51,6 +56,8 @@ export class OrganizationAccessService {
       where: { id: organizationId },
       select: {
         isActive: true,
+        subscriptionStatus: true,
+        trialEndsAt: true,
         userLimit: true,
         studentLimit: true,
         enabledModules: true,
@@ -63,10 +70,17 @@ export class OrganizationAccessService {
 
     return {
       isActive: organization.isActive,
+      subscriptionStatus: organization.subscriptionStatus,
+      trialEndsAt: organization.trialEndsAt,
       userLimit: organization.userLimit,
       studentLimit: organization.studentLimit,
       enabledModules: organization.enabledModules as OrganizationModule[],
     };
+  }
+
+  async assertOrganizationAccessible(organizationId: string): Promise<void> {
+    const organization = await this.getOrganizationConfiguration(organizationId);
+    this.assertOrganizationAccessibleConfiguration(organization);
   }
 
   async assertActorCanAccessModule(actor: CurrentUserContext, module: OrganizationModule): Promise<void> {
@@ -78,8 +92,28 @@ export class OrganizationAccessService {
       throw new ForbiddenException('Organization scope is required');
     }
 
+    await this.assertOrganizationAccessible(actor.organizationId);
+
     if (!(actor.enabledModules ?? []).includes(module)) {
       throw new ForbiddenException(`${module} module is not enabled for this organization`);
+    }
+  }
+
+  private assertOrganizationAccessibleConfiguration(organization: {
+    isActive: boolean;
+    subscriptionStatus: string;
+    trialEndsAt: Date | null;
+  }) {
+    if (!organization.isActive) {
+      throw new ForbiddenException('Organization is inactive');
+    }
+
+    if (['SUSPENDED', 'CANCELLED'].includes(organization.subscriptionStatus)) {
+      throw new ForbiddenException('Organization subscription is not active');
+    }
+
+    if (organization.subscriptionStatus === 'TRIAL' && organization.trialEndsAt && organization.trialEndsAt < new Date()) {
+      throw new ForbiddenException('Organization trial period has expired');
     }
   }
 }

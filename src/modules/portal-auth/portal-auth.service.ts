@@ -205,6 +205,14 @@ export class PortalAuthService {
       throw new UnauthorizedException('Organization is inactive');
     }
 
+    if (['SUSPENDED', 'CANCELLED'].includes(account.organization.subscriptionStatus)) {
+      throw new UnauthorizedException('Organization subscription is not active');
+    }
+
+    if (account.organization.subscriptionStatus === 'TRIAL' && account.organization.trialEndsAt && account.organization.trialEndsAt < new Date()) {
+      throw new UnauthorizedException('Organization trial period has expired');
+    }
+
     if (!(account.organization.enabledModules as string[]).includes(OrganizationModule.PORTALS)) {
       throw new UnauthorizedException('Portal access is not enabled for this organization');
     }

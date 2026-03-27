@@ -43,9 +43,21 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
   }
 
   async create(payload: CreateOrganizationDto): Promise<OrganizationSummary> {
-    const { enabledModules, ...rest } = payload;
+    const {
+      enabledModules,
+      subscriptionStatus: _subscriptionStatus,
+      trialDays: _trialDays,
+      trialStartsAt: _trialStartsAt,
+      trialEndsAt: _trialEndsAt,
+      subscriptionStartsAt: _subscriptionStartsAt,
+      subscriptionEndsAt: _subscriptionEndsAt,
+      subscriptionNotes: _subscriptionNotes,
+      ...rest
+    } = payload;
+    const billingData = this.resolveBillingFields(payload);
     const data: Prisma.OrganizationUncheckedCreateInput = {
       ...rest,
+      ...billingData,
       enabledModules: enabledModules as unknown as Prisma.OrganizationUncheckedCreateInput['enabledModules'],
     };
     const organization = await this.prisma.organization.create({
@@ -55,9 +67,22 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
   }
 
   async update(id: string, payload: UpdateOrganizationDto): Promise<OrganizationSummary> {
-    const { enabledModules, ...rest } = payload;
+    const existing = await this.prisma.organization.findUniqueOrThrow({ where: { id } });
+    const {
+      enabledModules,
+      subscriptionStatus: _subscriptionStatus,
+      trialDays: _trialDays,
+      trialStartsAt: _trialStartsAt,
+      trialEndsAt: _trialEndsAt,
+      subscriptionStartsAt: _subscriptionStartsAt,
+      subscriptionEndsAt: _subscriptionEndsAt,
+      subscriptionNotes: _subscriptionNotes,
+      ...rest
+    } = payload;
+    const billingData = this.resolveBillingFields(payload, existing);
     const data: Prisma.OrganizationUncheckedUpdateInput = {
       ...rest,
+      ...billingData,
       ...(enabledModules
         ? {
             enabledModules: enabledModules as unknown as Prisma.OrganizationUncheckedUpdateInput['enabledModules'],
@@ -128,5 +153,44 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
       totalAttendanceRecords,
       totalReminderLogs,
     };
+  }
+
+  private resolveBillingFields(payload: CreateOrganizationDto | UpdateOrganizationDto, existing?: Organization) {
+    const trialDays = payload.trialDays ?? existing?.trialDays ?? 14;
+    const trialStartsAt = payload.trialStartsAt ? new Date(payload.trialStartsAt) : existing?.trialStartsAt ?? new Date();
+    const shouldRecalculateTrialEndsAt =
+      payload.trialEndsAt !== undefined || payload.trialDays !== undefined || payload.trialStartsAt !== undefined || !existing;
+    const trialEndsAt = payload.trialEndsAt
+      ? new Date(payload.trialEndsAt)
+      : shouldRecalculateTrialEndsAt
+        ? this.addDays(trialStartsAt, trialDays)
+        : existing?.trialEndsAt;
+
+    return {
+      subscriptionStatus: payload.subscriptionStatus ?? existing?.subscriptionStatus,
+      trialDays,
+      trialStartsAt,
+      trialEndsAt,
+      subscriptionStartsAt:
+        payload.subscriptionStartsAt !== undefined
+          ? payload.subscriptionStartsAt
+            ? new Date(payload.subscriptionStartsAt)
+            : null
+          : existing?.subscriptionStartsAt,
+      subscriptionEndsAt:
+        payload.subscriptionEndsAt !== undefined
+          ? payload.subscriptionEndsAt
+            ? new Date(payload.subscriptionEndsAt)
+            : null
+          : existing?.subscriptionEndsAt,
+      subscriptionNotes:
+        payload.subscriptionNotes !== undefined ? payload.subscriptionNotes || null : existing?.subscriptionNotes,
+    };
+  }
+
+  private addDays(date: Date, days: number): Date {
+    const nextDate = new Date(date);
+    nextDate.setDate(nextDate.getDate() + days);
+    return nextDate;
   }
 }

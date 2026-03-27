@@ -301,6 +301,8 @@ export class AuthService {
         id: string;
         name: string;
         isActive: boolean;
+        subscriptionStatus: string;
+        trialEndsAt: Date | null;
         userLimit: number;
         studentLimit: number;
         enabledModules: string[];
@@ -335,7 +337,7 @@ export class AuthService {
 
   private async ensureAuthenticationAllowed(
     user: User & {
-      organization?: { id: string; name: string; isActive: boolean } | null;
+      organization?: { id: string; name: string; isActive: boolean; subscriptionStatus: string; trialEndsAt: Date | null } | null;
       userRoles?: Array<{ role: { name: string } }>;
     },
     email: string,
@@ -402,6 +404,56 @@ export class AuthService {
         },
       });
       throw new UnauthorizedException('Organization is inactive');
+    }
+
+    if (user.organizationId && user.organization) {
+      if (['SUSPENDED', 'CANCELLED'].includes(user.organization.subscriptionStatus)) {
+        await this.userRepository.createLoginEvent({
+          userId: user.id,
+          organizationId: user.organization.id,
+          email: user.email,
+          status: 'BLOCKED',
+          failureReason: 'subscription-blocked',
+          ...requestMetadata,
+        });
+        await this.auditLogService.log({
+          actorUserId: user.id,
+          module: 'auth',
+          action: 'login-blocked',
+          targetId: user.id,
+          metadata: {
+            reason: 'subscription-blocked',
+            email,
+            organizationId: user.organization.id,
+            subscriptionStatus: user.organization.subscriptionStatus,
+          },
+        });
+        throw new UnauthorizedException('Organization subscription is not active');
+      }
+
+      if (user.organization.subscriptionStatus === 'TRIAL' && user.organization.trialEndsAt && user.organization.trialEndsAt < new Date()) {
+        await this.userRepository.createLoginEvent({
+          userId: user.id,
+          organizationId: user.organization.id,
+          email: user.email,
+          status: 'BLOCKED',
+          failureReason: 'trial-expired',
+          ...requestMetadata,
+        });
+        await this.auditLogService.log({
+          actorUserId: user.id,
+          module: 'auth',
+          action: 'login-blocked',
+          targetId: user.id,
+          metadata: {
+            reason: 'trial-expired',
+            email,
+            organizationId: user.organization.id,
+            trialEndsAt: user.organization.trialEndsAt.toISOString(),
+          },
+        });
+        throw new UnauthorizedException('Organization trial period has expired');
+      }
     }
   }
 

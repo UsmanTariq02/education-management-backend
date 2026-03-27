@@ -4,6 +4,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
+import { CreateOrganizationBillingEntryDto } from './dto/create-organization-billing-entry.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
@@ -41,5 +42,21 @@ export class OrganizationsController {
     @CurrentUser() actor: CurrentUserContext,
   ) {
     return this.organizationsService.update(id, payload, actor);
+  }
+
+  @Get(':id/billing-entries')
+  @ApiOperation({ summary: 'List organization billing ledger entries' })
+  async billingEntries(@Param('id') id: string) {
+    return this.organizationsService.listBillingEntries(id);
+  }
+
+  @Post(':id/billing-entries')
+  @ApiOperation({ summary: 'Create organization billing ledger entry' })
+  async createBillingEntry(
+    @Param('id') id: string,
+    @Body() payload: CreateOrganizationBillingEntryDto,
+    @CurrentUser() actor: CurrentUserContext,
+  ) {
+    return this.organizationsService.createBillingEntry(id, payload, actor);
   }
 }

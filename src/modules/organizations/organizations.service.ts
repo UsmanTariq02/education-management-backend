@@ -3,6 +3,8 @@ import { ORGANIZATION_REPOSITORY, REMINDER_REPOSITORY } from '../../common/const
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { AuditLogService } from '../../common/services/audit-log.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateOrganizationBillingEntryDto } from './dto/create-organization-billing-entry.dto';
 import { ReminderRepository } from '../reminders/interfaces/reminder.repository.interface';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
@@ -16,6 +18,7 @@ export class OrganizationsService {
     @Inject(REMINDER_REPOSITORY)
     private readonly reminderRepository: ReminderRepository,
     private readonly auditLogService: AuditLogService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async findAll(query: PaginationQueryDto) {
@@ -60,8 +63,57 @@ export class OrganizationsService {
       module: 'organizations',
       action: 'update',
       targetId: organization.id,
+      metadata: {
+        subscriptionStatus: organization.subscriptionStatus,
+        trialEndsAt: organization.trialEndsAt,
+        subscriptionEndsAt: organization.subscriptionEndsAt,
+      },
     });
     return organization;
+  }
+
+  async listBillingEntries(id: string) {
+    await this.findOne(id);
+    return this.prisma.organizationBillingEntry.findMany({
+      where: { organizationId: id },
+      orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
+      take: 50,
+    });
+  }
+
+  async createBillingEntry(id: string, payload: CreateOrganizationBillingEntryDto, actor: CurrentUserContext) {
+    const organization = await this.findOne(id);
+    const entry = await this.prisma.organizationBillingEntry.create({
+      data: {
+        organizationId: id,
+        type: payload.type,
+        status: payload.status,
+        title: payload.title,
+        description: payload.description,
+        amount: payload.amount,
+        currency: payload.currency,
+        dueDate: payload.dueDate ? new Date(payload.dueDate) : undefined,
+        entryDate: payload.entryDate ? new Date(payload.entryDate) : undefined,
+        periodStart: payload.periodStart ? new Date(payload.periodStart) : undefined,
+        periodEnd: payload.periodEnd ? new Date(payload.periodEnd) : undefined,
+        userCountSnapshot: organization.totalUsers,
+        moduleCountSnapshot: organization.enabledModules.length,
+      },
+    });
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'organizations',
+      action: 'create-billing-entry',
+      targetId: id,
+      metadata: {
+        billingEntryId: entry.id,
+        type: entry.type,
+        status: entry.status,
+        amount: entry.amount,
+        currency: entry.currency,
+      },
+    });
+    return entry;
   }
 
   async updateCurrent(payload: UpdateOrganizationDto, actor: CurrentUserContext) {

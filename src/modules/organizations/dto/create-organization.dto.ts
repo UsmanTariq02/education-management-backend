@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsEmail, IsEnum, IsInt, IsOptional, IsString, Matches, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEmail, IsEnum, IsInt, IsOptional, IsString, Matches, Min } from 'class-validator';
 import { DEFAULT_ORGANIZATION_MODULES, OrganizationModule } from '../../../common/enums/organization-module.enum';
+import { SubscriptionStatus } from '@prisma/client';
 
 export class CreateOrganizationDto {
   @ApiProperty()
@@ -30,6 +31,42 @@ export class CreateOrganizationDto {
   @IsBoolean()
   @IsOptional()
   isActive = true;
+
+  @ApiPropertyOptional({ enum: SubscriptionStatus, default: SubscriptionStatus.TRIAL })
+  @IsEnum(SubscriptionStatus)
+  @IsOptional()
+  subscriptionStatus = SubscriptionStatus.TRIAL;
+
+  @ApiPropertyOptional({ default: 14 })
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  trialDays = 14;
+
+  @ApiPropertyOptional()
+  @IsDateString()
+  @IsOptional()
+  trialStartsAt?: string;
+
+  @ApiPropertyOptional()
+  @IsDateString()
+  @IsOptional()
+  trialEndsAt?: string;
+
+  @ApiPropertyOptional()
+  @IsDateString()
+  @IsOptional()
+  subscriptionStartsAt?: string;
+
+  @ApiPropertyOptional()
+  @IsDateString()
+  @IsOptional()
+  subscriptionEndsAt?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  subscriptionNotes?: string;
 
   @ApiPropertyOptional({ default: 10 })
   @IsInt()

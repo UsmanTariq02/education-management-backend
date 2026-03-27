@@ -9,6 +9,8 @@ export type UserWithAuthorization = User & {
     id: string;
     name: string;
     isActive: boolean;
+    subscriptionStatus: string;
+    trialEndsAt: Date | null;
     userLimit: number;
     studentLimit: number;
     enabledModules: string[];
