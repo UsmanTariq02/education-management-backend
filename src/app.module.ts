@@ -26,6 +26,7 @@ import { TeachersModule } from './modules/teachers/teachers.module';
 import { BatchSubjectAssignmentsModule } from './modules/batch-subject-assignments/batch-subject-assignments.module';
 import { TimetablesModule } from './modules/timetables/timetables.module';
 import { ExamsModule } from './modules/exams/exams.module';
+import { AssessmentsModule } from './modules/assessments/assessments.module';
 import { ExamResultsModule } from './modules/exam-results/exam-results.module';
 import { FeesModule } from './modules/fees/fees.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
@@ -70,6 +71,7 @@ import { OnlineClassesModule } from './modules/online-classes/online-classes.mod
     BatchSubjectAssignmentsModule,
     TimetablesModule,
     ExamsModule,
+    AssessmentsModule,
     ExamResultsModule,
     FeesModule,
     AttendanceModule,

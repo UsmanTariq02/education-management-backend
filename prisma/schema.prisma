@@ -36,6 +36,11 @@ model Organization {
   batchSubjectAssignments        BatchSubjectAssignment[]
   timetableEntries               TimetableEntry[]
   exams                          Exam[]
+  assessments                    Assessment[]
+  assessmentQuestions            AssessmentQuestion[]
+  assessmentAttempts             AssessmentAttempt[]
+  assessmentAnswers              AssessmentAnswer[]
+  assessmentResults              AssessmentResult[]
   studentExamResults             StudentExamResult[]
   studentExamResultItems         StudentExamResultItem[]
   portalAccounts                 PortalAccount[]
@@ -238,6 +243,40 @@ enum StudentExamResultStatus {
   PUBLISHED
 }
 
+enum AssessmentType {
+  QUIZ
+  TEST
+  ASSIGNMENT
+  PRACTICE
+}
+
+enum AssessmentQuestionType {
+  MCQ
+  TRUE_FALSE
+  FILL_IN_THE_BLANK
+  SHORT_ANSWER
+  LONG_ANSWER
+}
+
+enum AssessmentStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum AssessmentAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_GRADED
+  REVIEW_PENDING
+  COMPLETED
+}
+
+enum AssessmentResultStatus {
+  PROVISIONAL
+  FINALIZED
+}
+
 enum PortalAccountType {
   STUDENT
   PARENT
@@ -360,6 +399,8 @@ model Student {
   reminderLogs                   ReminderLog[]
   reminderSchedules              ReminderSchedule[]
   examResults                    StudentExamResult[]
+  assessmentAttempts             AssessmentAttempt[]
+  assessmentResults              AssessmentResult[]
   portalAccounts                 PortalAccount[]
   documents                      StudentDocument[]
   onlineClassParticipantSessions OnlineClassParticipantSession[]
@@ -453,6 +494,7 @@ model Batch {
   timetableEntries    TimetableEntry[]
   onlineClassSessions OnlineClassSession[]
   exams               Exam[]
+  assessments         Assessment[]
   examResults         StudentExamResult[]
   feePlans            FeePlan[]
   feeRecords          FeeRecord[]
@@ -480,6 +522,7 @@ model AcademicSession {
   timetableEntries        TimetableEntry[]
   onlineClassSessions     OnlineClassSession[]
   exams                   Exam[]
+  assessments             Assessment[]
   studentExamResults      StudentExamResult[]
 
   @@unique([organizationId, code])
@@ -501,6 +544,8 @@ model Subject {
   timetableEntries    TimetableEntry[]
   onlineClassSessions OnlineClassSession[]
   examSubjects        ExamSubject[]
+  assessments         Assessment[]
+  assessmentQuestions AssessmentQuestion[]
   resultItems         StudentExamResultItem[]
 
   @@unique([organizationId, code])
@@ -528,6 +573,8 @@ model Teacher {
   timetableEntries    TimetableEntry[]
   onlineClassSessions OnlineClassSession[]
   exams               Exam[]
+  assessments         Assessment[]
+  assessmentReviews   AssessmentAnswer[]
 
   @@unique([organizationId, employeeId])
   @@unique([organizationId, email])
@@ -616,6 +663,162 @@ model Exam {
   @@unique([organizationId, code])
   @@index([organizationId, examDate])
   @@index([batchId, examDate])
+}
+
+model Assessment {
+  id                       String                  @id @default(uuid()) @db.Uuid
+  organizationId           String                  @db.Uuid
+  academicSessionId        String?                 @db.Uuid
+  batchId                  String                  @db.Uuid
+  subjectId                String                  @db.Uuid
+  teacherId                String?                 @db.Uuid
+  title                    String                  @db.VarChar(180)
+  code                     String                  @db.VarChar(60)
+  description              String?                 @db.Text
+  instructions             String?                 @db.Text
+  type                     AssessmentType          @default(QUIZ)
+  status                   AssessmentStatus        @default(DRAFT)
+  durationMinutes          Int                     @default(30)
+  totalMarks               Decimal                 @default(0) @db.Decimal(10, 2)
+  passMarks                Decimal                 @default(0) @db.Decimal(10, 2)
+  startsAt                 DateTime?
+  endsAt                   DateTime?
+  availableFrom            DateTime?
+  availableUntil           DateTime?
+  shuffleQuestions         Boolean                 @default(false)
+  shuffleOptions           Boolean                 @default(false)
+  showResultImmediately    Boolean                 @default(true)
+  allowMultipleAttempts    Boolean                 @default(false)
+  maxAttempts              Int                     @default(1)
+  negativeMarkingEnabled   Boolean                 @default(false)
+  negativeMarkingPerWrong  Decimal?                @db.Decimal(8, 2)
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  organization             Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  academicSession          AcademicSession?        @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  batch                    Batch                   @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject                  Subject                 @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher                  Teacher?                @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  questions                AssessmentQuestion[]
+  attempts                 AssessmentAttempt[]
+  results                  AssessmentResult[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([batchId, subjectId])
+}
+
+model AssessmentQuestion {
+  id                   String                  @id @default(uuid()) @db.Uuid
+  organizationId       String                  @db.Uuid
+  assessmentId         String                  @db.Uuid
+  subjectId            String                  @db.Uuid
+  prompt               String                  @db.Text
+  helperText           String?                 @db.Text
+  type                 AssessmentQuestionType
+  orderIndex           Int
+  marks                Decimal                 @default(1) @db.Decimal(8, 2)
+  explanation          String?                 @db.Text
+  acceptedAnswers      String[]
+  correctBooleanAnswer Boolean?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  organization         Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assessment           Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  subject              Subject                 @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  options              AssessmentQuestionOption[]
+  answers              AssessmentAnswer[]
+
+  @@index([assessmentId, orderIndex])
+  @@index([organizationId, type])
+}
+
+model AssessmentQuestionOption {
+  id          String             @id @default(uuid()) @db.Uuid
+  questionId  String             @db.Uuid
+  text        String             @db.Text
+  orderIndex  Int
+  isCorrect   Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  question    AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers     AssessmentAnswer[]
+
+  @@index([questionId, orderIndex])
+}
+
+model AssessmentAttempt {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  organizationId     String                  @db.Uuid
+  assessmentId       String                  @db.Uuid
+  studentId          String                  @db.Uuid
+  status             AssessmentAttemptStatus @default(IN_PROGRESS)
+  attemptNumber      Int                     @default(1)
+  startedAt          DateTime                @default(now())
+  submittedAt        DateTime?
+  autoGradedAt       DateTime?
+  requiresManualReview Boolean               @default(false)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assessment         Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student            Student                 @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers            AssessmentAnswer[]
+  result             AssessmentResult?
+
+  @@unique([assessmentId, studentId, attemptNumber])
+  @@index([organizationId, status])
+  @@index([studentId, status])
+}
+
+model AssessmentAnswer {
+  id                    String              @id @default(uuid()) @db.Uuid
+  organizationId        String              @db.Uuid
+  attemptId             String              @db.Uuid
+  questionId            String              @db.Uuid
+  selectedOptionId      String?             @db.Uuid
+  answerText            String?             @db.Text
+  isCorrect             Boolean?
+  awardedMarks          Decimal?            @db.Decimal(8, 2)
+  isAutoGraded          Boolean             @default(false)
+  reviewedByTeacherId   String?             @db.Uuid
+  reviewedAt            DateTime?
+  feedback              String?             @db.Text
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attempt               AssessmentAttempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question              AssessmentQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption        AssessmentQuestionOption? @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+  reviewedByTeacher     Teacher?            @relation(fields: [reviewedByTeacherId], references: [id], onDelete: SetNull)
+
+  @@unique([attemptId, questionId])
+  @@index([organizationId, reviewedAt])
+}
+
+model AssessmentResult {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  organizationId     String                 @db.Uuid
+  assessmentId       String                 @db.Uuid
+  attemptId          String                 @unique @db.Uuid
+  studentId          String                 @db.Uuid
+  obtainedMarks      Decimal                @default(0) @db.Decimal(10, 2)
+  totalMarks         Decimal                @default(0) @db.Decimal(10, 2)
+  percentage         Decimal                @default(0) @db.Decimal(5, 2)
+  correctAnswers     Int                    @default(0)
+  incorrectAnswers   Int                    @default(0)
+  unansweredCount    Int                    @default(0)
+  status             AssessmentResultStatus @default(PROVISIONAL)
+  publishedAt        DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assessment         Assessment             @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  attempt            AssessmentAttempt      @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  student            Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([studentId, status])
 }
 
 model ExamSubject {
