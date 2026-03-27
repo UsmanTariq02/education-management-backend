@@ -3,6 +3,13 @@ import { AttendanceStatus } from '@prisma/client';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentPortalUserContext } from '../../common/interfaces/current-portal-user.interface';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  PortalAssessmentDetailDto,
+  PortalAssessmentListItemDto,
+  PortalAssessmentSubmitResultDto,
+  PortalAssessmentAttemptDto,
+  SavePortalAssessmentAttemptDto,
+} from './dto/portal-assessments.dto';
 import { PortalDashboardDto } from './dto/portal-dashboard.dto';
 
 @Injectable()
@@ -40,7 +47,7 @@ export class PortalService {
 
     const batchIds = student.studentBatches.map((item) => item.batchId);
 
-    const [feeRecords, attendanceRecords, reminderLogs, examResults, timetableEntries] = await Promise.all([
+    const [feeRecords, attendanceRecords, reminderLogs, examResults, timetableEntries, publishedAssessments, recentAssessmentAttempts] = await Promise.all([
       this.prisma.feeRecord.findMany({
         where: { organizationId: actor.organizationId, studentId: actor.studentId },
         orderBy: [{ year: 'desc' }, { month: 'desc' }, { createdAt: 'desc' }],
@@ -89,6 +96,42 @@ export class PortalService {
         },
         orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
         take: 20,
+      }),
+      this.prisma.assessment.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          batchId: { in: batchIds.length ? batchIds : ['00000000-0000-0000-0000-000000000000'] },
+          status: 'PUBLISHED',
+        },
+        include: {
+          subject: { select: { name: true } },
+          attempts: {
+            where: { studentId: actor.studentId },
+            include: { result: true },
+            orderBy: [{ attemptNumber: 'desc' }],
+            take: 1,
+          },
+        },
+        orderBy: [{ availableUntil: 'asc' }, { createdAt: 'desc' }],
+        take: 6,
+      }),
+      this.prisma.assessmentAttempt.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+        },
+        include: {
+          assessment: {
+            select: {
+              id: true,
+              title: true,
+              subject: { select: { name: true } },
+            },
+          },
+          result: true,
+        },
+        orderBy: [{ updatedAt: 'desc' }],
+        take: 6,
       }),
     ]);
 
@@ -193,7 +236,527 @@ export class PortalService {
           room: item.room,
           batchName: item.batch.name,
         })),
+        assessmentSummary: {
+          availableCount: publishedAssessments.length,
+          inProgressCount: recentAssessmentAttempts.filter((item) => item.status === 'IN_PROGRESS').length,
+          completedCount: recentAssessmentAttempts.filter((item) => ['AUTO_GRADED', 'REVIEW_PENDING', 'COMPLETED'].includes(item.status)).length,
+          upcoming: publishedAssessments.map((item) => ({
+            id: item.id,
+            title: item.title,
+            subjectName: item.subject.name,
+            type: item.type,
+            availableUntil: item.availableUntil,
+            durationMinutes: item.durationMinutes,
+          })),
+          recentAttempts: recentAssessmentAttempts.map((item) => ({
+            attemptId: item.id,
+            assessmentId: item.assessment.id,
+            title: item.assessment.title,
+            subjectName: item.assessment.subject.name,
+            status: item.status,
+            percentage: item.result ? Number(item.result.percentage) : null,
+            submittedAt: item.submittedAt,
+          })),
+        },
       },
+    };
+  }
+
+  async getAssessments(actor: CurrentPortalUserContext): Promise<PortalAssessmentListItemDto[]> {
+    const batchIds = await this.getStudentBatchIds(actor);
+    const assessments = await this.prisma.assessment.findMany({
+      where: {
+        organizationId: actor.organizationId,
+        batchId: { in: batchIds.length ? batchIds : ['00000000-0000-0000-0000-000000000000'] },
+        status: 'PUBLISHED',
+      },
+      include: {
+        subject: { select: { name: true } },
+        batch: { select: { name: true } },
+        questions: { select: { id: true } },
+        attempts: {
+          where: { studentId: actor.studentId },
+          include: { result: true },
+          orderBy: [{ attemptNumber: 'desc' }],
+          take: 1,
+        },
+      },
+      orderBy: [{ availableFrom: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    return assessments.map((assessment) => {
+      const latestAttempt = assessment.attempts[0] ?? null;
+      return {
+        id: assessment.id,
+        title: assessment.title,
+        code: assessment.code,
+        subjectName: assessment.subject.name,
+        batchName: assessment.batch.name,
+        type: assessment.type,
+        durationMinutes: assessment.durationMinutes,
+        totalMarks: Number(assessment.totalMarks),
+        passMarks: Number(assessment.passMarks),
+        startsAt: assessment.startsAt,
+        endsAt: assessment.endsAt,
+        availableFrom: assessment.availableFrom,
+        availableUntil: assessment.availableUntil,
+        showResultImmediately: assessment.showResultImmediately,
+        questionCount: assessment.questions.length,
+        latestAttempt: latestAttempt
+          ? {
+              id: latestAttempt.id,
+              status: latestAttempt.status,
+              attemptNumber: latestAttempt.attemptNumber,
+              submittedAt: latestAttempt.submittedAt,
+              resultStatus: latestAttempt.result?.status ?? null,
+              percentage: latestAttempt.result ? Number(latestAttempt.result.percentage) : null,
+            }
+          : null,
+      };
+    });
+  }
+
+  async getAssessmentDetail(assessmentId: string, actor: CurrentPortalUserContext): Promise<PortalAssessmentDetailDto> {
+    const assessment = await this.getPortalAssessmentOrThrow(assessmentId, actor);
+    const activeAttempt = assessment.attempts.find((attempt) => attempt.status === 'IN_PROGRESS') ?? assessment.attempts[0] ?? null;
+
+    return {
+      id: assessment.id,
+      title: assessment.title,
+      code: assessment.code,
+      description: assessment.description,
+      instructions: assessment.instructions,
+      subjectName: assessment.subject.name,
+      batchName: assessment.batch.name,
+      type: assessment.type,
+      durationMinutes: assessment.durationMinutes,
+      totalMarks: Number(assessment.totalMarks),
+      passMarks: Number(assessment.passMarks),
+      startsAt: assessment.startsAt,
+      endsAt: assessment.endsAt,
+      availableFrom: assessment.availableFrom,
+      availableUntil: assessment.availableUntil,
+      showResultImmediately: assessment.showResultImmediately,
+      allowMultipleAttempts: assessment.allowMultipleAttempts,
+      maxAttempts: assessment.maxAttempts,
+      questionCount: assessment.questions.length,
+      questions: assessment.questions.map((question) => ({
+        id: question.id,
+        type: question.type,
+        prompt: question.prompt,
+        helperText: question.helperText,
+        orderIndex: question.orderIndex,
+        marks: Number(question.marks),
+        options: question.options.map((option) => ({
+          id: option.id,
+          text: option.text,
+          orderIndex: option.orderIndex,
+        })),
+      })),
+      activeAttempt: activeAttempt ? this.mapAttempt(activeAttempt) : null,
+    };
+  }
+
+  async startAssessment(assessmentId: string, actor: CurrentPortalUserContext): Promise<PortalAssessmentAttemptDto> {
+    this.ensureStudentPortalActor(actor);
+    const assessment = await this.getPortalAssessmentOrThrow(assessmentId, actor);
+    this.assertAssessmentAvailable(assessment);
+
+    const existingInProgress = assessment.attempts.find((attempt) => attempt.status === 'IN_PROGRESS');
+    if (existingInProgress) {
+      return this.mapAttempt(existingInProgress);
+    }
+
+    const completedAttempts = assessment.attempts.filter((attempt) => attempt.status !== 'IN_PROGRESS');
+    if (!assessment.allowMultipleAttempts && completedAttempts.length) {
+      throw new UnauthorizedException('This assessment has already been attempted');
+    }
+    if (assessment.allowMultipleAttempts && completedAttempts.length >= assessment.maxAttempts) {
+      throw new UnauthorizedException('Maximum attempts reached for this assessment');
+    }
+
+    const attempt = await this.prisma.assessmentAttempt.create({
+      data: {
+        organizationId: actor.organizationId,
+        assessmentId: assessment.id,
+        studentId: actor.studentId,
+        attemptNumber: completedAttempts.length + 1,
+      },
+      include: {
+        answers: true,
+        result: true,
+      },
+    });
+
+    return this.mapAttempt(attempt);
+  }
+
+  async saveAssessmentAnswers(
+    attemptId: string,
+    payload: SavePortalAssessmentAttemptDto,
+    actor: CurrentPortalUserContext,
+  ): Promise<PortalAssessmentAttemptDto> {
+    this.ensureStudentPortalActor(actor);
+    const attempt = await this.prisma.assessmentAttempt.findFirst({
+      where: {
+        id: attemptId,
+        organizationId: actor.organizationId,
+        studentId: actor.studentId,
+      },
+      include: {
+        assessment: {
+          include: {
+            questions: {
+              include: { options: true },
+            },
+          },
+        },
+        answers: true,
+        result: true,
+      },
+    });
+
+    if (!attempt) {
+      throw new NotFoundException('Assessment attempt not found');
+    }
+    if (attempt.status !== 'IN_PROGRESS') {
+      throw new UnauthorizedException('Only in-progress attempts can be updated');
+    }
+
+    const questionMap = new Map(attempt.assessment.questions.map((question) => [question.id, question]));
+
+    await this.prisma.$transaction(
+      payload.answers.map((answer) => {
+        const question = questionMap.get(answer.questionId);
+        if (!question) {
+          throw new NotFoundException('Assessment question not found');
+        }
+        if (answer.selectedOptionId && !question.options.some((option) => option.id === answer.selectedOptionId)) {
+          throw new UnauthorizedException('Selected option does not belong to the question');
+        }
+
+        return this.prisma.assessmentAnswer.upsert({
+          where: {
+            attemptId_questionId: {
+              attemptId: attempt.id,
+              questionId: question.id,
+            },
+          },
+          update: {
+            selectedOptionId: answer.selectedOptionId ?? null,
+            answerText: answer.answerText?.trim() ? answer.answerText.trim() : null,
+            isCorrect: null,
+            awardedMarks: null,
+            isAutoGraded: false,
+            feedback: null,
+            reviewedAt: null,
+            reviewedByTeacherId: null,
+          },
+          create: {
+            organizationId: actor.organizationId,
+            attemptId: attempt.id,
+            questionId: question.id,
+            selectedOptionId: answer.selectedOptionId ?? null,
+            answerText: answer.answerText?.trim() ? answer.answerText.trim() : null,
+          },
+        });
+      }),
+    );
+
+    const refreshedAttempt = await this.prisma.assessmentAttempt.findUniqueOrThrow({
+      where: { id: attempt.id },
+      include: {
+        answers: true,
+        result: true,
+      },
+    });
+
+    return this.mapAttempt(refreshedAttempt);
+  }
+
+  async submitAssessment(attemptId: string, actor: CurrentPortalUserContext): Promise<PortalAssessmentSubmitResultDto> {
+    this.ensureStudentPortalActor(actor);
+    const attempt = await this.prisma.assessmentAttempt.findFirst({
+      where: {
+        id: attemptId,
+        organizationId: actor.organizationId,
+        studentId: actor.studentId,
+      },
+      include: {
+        assessment: {
+          include: {
+            questions: {
+              include: { options: true },
+              orderBy: { orderIndex: 'asc' },
+            },
+          },
+        },
+        answers: true,
+        result: true,
+      },
+    });
+
+    if (!attempt) {
+      throw new NotFoundException('Assessment attempt not found');
+    }
+    if (attempt.status !== 'IN_PROGRESS') {
+      throw new UnauthorizedException('Assessment attempt has already been submitted');
+    }
+
+    const answerMap = new Map(attempt.answers.map((answer) => [answer.questionId, answer]));
+    let obtainedMarks = 0;
+    let correctAnswers = 0;
+    let incorrectAnswers = 0;
+    let unansweredCount = 0;
+    let requiresManualReview = false;
+
+    const gradingUpdates = attempt.assessment.questions.map((question) => {
+      const existingAnswer = answerMap.get(question.id);
+      const normalizedText = existingAnswer?.answerText?.trim().toLowerCase() ?? '';
+      const questionMarks = Number(question.marks);
+
+      if (!existingAnswer || (!existingAnswer.selectedOptionId && !normalizedText)) {
+        unansweredCount += 1;
+        return null;
+      }
+
+      if (question.type === 'SHORT_ANSWER' || question.type === 'LONG_ANSWER') {
+        requiresManualReview = true;
+        return this.prisma.assessmentAnswer.update({
+          where: { id: existingAnswer.id },
+          data: {
+            isAutoGraded: false,
+            isCorrect: null,
+            awardedMarks: null,
+          },
+        });
+      }
+
+      let isCorrect = false;
+      if (question.type === 'MCQ') {
+        const selectedOption = question.options.find((option) => option.id === existingAnswer.selectedOptionId);
+        isCorrect = Boolean(selectedOption?.isCorrect);
+      } else if (question.type === 'TRUE_FALSE') {
+        isCorrect = String(question.correctBooleanAnswer) === normalizedText;
+      } else if (question.type === 'FILL_IN_THE_BLANK') {
+        isCorrect = question.acceptedAnswers.some((answer) => answer.trim().toLowerCase() === normalizedText);
+      }
+
+      const awardedMarks = isCorrect
+        ? questionMarks
+        : attempt.assessment.negativeMarkingEnabled
+          ? Math.max(0 - Number(attempt.assessment.negativeMarkingPerWrong ?? 0), -questionMarks)
+          : 0;
+
+      if (isCorrect) {
+        correctAnswers += 1;
+      } else {
+        incorrectAnswers += 1;
+      }
+      obtainedMarks += awardedMarks;
+
+      return this.prisma.assessmentAnswer.update({
+        where: { id: existingAnswer.id },
+        data: {
+          isAutoGraded: true,
+          isCorrect,
+          awardedMarks,
+        },
+      });
+    });
+
+    const totalMarks = Number(attempt.assessment.totalMarks);
+    const percentage = totalMarks > 0 ? Number(((obtainedMarks / totalMarks) * 100).toFixed(2)) : 0;
+    const resultStatus = requiresManualReview ? 'PROVISIONAL' : 'FINALIZED';
+
+    await this.prisma.$transaction([
+      ...gradingUpdates.filter((update): update is NonNullable<typeof update> => Boolean(update)),
+      this.prisma.assessmentAttempt.update({
+        where: { id: attempt.id },
+        data: {
+          status: requiresManualReview ? 'REVIEW_PENDING' : 'COMPLETED',
+          submittedAt: new Date(),
+          autoGradedAt: new Date(),
+          requiresManualReview,
+        },
+      }),
+      this.prisma.assessmentResult.upsert({
+        where: { attemptId: attempt.id },
+        update: {
+          obtainedMarks,
+          totalMarks,
+          percentage,
+          correctAnswers,
+          incorrectAnswers,
+          unansweredCount,
+          status: resultStatus,
+          publishedAt: attempt.assessment.showResultImmediately ? new Date() : null,
+        },
+        create: {
+          organizationId: actor.organizationId,
+          assessmentId: attempt.assessment.id,
+          attemptId: attempt.id,
+          studentId: actor.studentId,
+          obtainedMarks,
+          totalMarks,
+          percentage,
+          correctAnswers,
+          incorrectAnswers,
+          unansweredCount,
+          status: resultStatus,
+          publishedAt: attempt.assessment.showResultImmediately ? new Date() : null,
+        },
+      }),
+    ]);
+
+    const submittedAttempt = await this.prisma.assessmentAttempt.findUniqueOrThrow({
+      where: { id: attempt.id },
+      include: {
+        answers: true,
+        result: true,
+      },
+    });
+
+    return {
+      attemptId: submittedAttempt.id,
+      status: submittedAttempt.result?.status ?? 'PROVISIONAL',
+      requiresManualReview: submittedAttempt.requiresManualReview,
+      obtainedMarks: submittedAttempt.result ? Number(submittedAttempt.result.obtainedMarks) : 0,
+      totalMarks: submittedAttempt.result ? Number(submittedAttempt.result.totalMarks) : totalMarks,
+      percentage: submittedAttempt.result ? Number(submittedAttempt.result.percentage) : percentage,
+      correctAnswers: submittedAttempt.result?.correctAnswers ?? correctAnswers,
+      incorrectAnswers: submittedAttempt.result?.incorrectAnswers ?? incorrectAnswers,
+      unansweredCount: submittedAttempt.result?.unansweredCount ?? unansweredCount,
+      answers: submittedAttempt.answers.map((answer) => ({
+        questionId: answer.questionId,
+        selectedOptionId: answer.selectedOptionId,
+        answerText: answer.answerText,
+        awardedMarks: answer.awardedMarks ? Number(answer.awardedMarks) : null,
+        isCorrect: answer.isCorrect,
+        feedback: answer.feedback,
+      })),
+    };
+  }
+
+  private ensureStudentPortalActor(actor: CurrentPortalUserContext): void {
+    if (actor.accountType !== 'STUDENT') {
+      throw new UnauthorizedException('Only student portal accounts can attempt assessments');
+    }
+  }
+
+  private async getStudentBatchIds(actor: CurrentPortalUserContext): Promise<string[]> {
+    const studentBatches = await this.prisma.studentBatch.findMany({
+      where: {
+        studentId: actor.studentId,
+        batch: {
+          organizationId: actor.organizationId,
+        },
+      },
+      select: {
+        batchId: true,
+      },
+    });
+
+    return studentBatches.map((item) => item.batchId);
+  }
+
+  private async getPortalAssessmentOrThrow(assessmentId: string, actor: CurrentPortalUserContext) {
+    const batchIds = await this.getStudentBatchIds(actor);
+    const assessment = await this.prisma.assessment.findFirst({
+      where: {
+        id: assessmentId,
+        organizationId: actor.organizationId,
+        batchId: { in: batchIds.length ? batchIds : ['00000000-0000-0000-0000-000000000000'] },
+        status: 'PUBLISHED',
+      },
+      include: {
+        subject: { select: { name: true } },
+        batch: { select: { name: true } },
+        questions: {
+          include: { options: { orderBy: { orderIndex: 'asc' } } },
+          orderBy: { orderIndex: 'asc' },
+        },
+        attempts: {
+          where: { studentId: actor.studentId },
+          include: {
+            answers: true,
+            result: true,
+          },
+          orderBy: [{ attemptNumber: 'desc' }],
+        },
+      },
+    });
+
+    if (!assessment) {
+      throw new NotFoundException('Assessment not found');
+    }
+
+    return assessment;
+  }
+
+  private assertAssessmentAvailable(assessment: {
+    status: 'DRAFT' | 'PUBLISHED' | 'CLOSED';
+    availableFrom: Date | null;
+    availableUntil: Date | null;
+    startsAt: Date | null;
+    endsAt: Date | null;
+  }): void {
+    const now = new Date();
+    if (assessment.status !== 'PUBLISHED') {
+      throw new UnauthorizedException('Assessment is not published');
+    }
+    if (assessment.availableFrom && now < assessment.availableFrom) {
+      throw new UnauthorizedException('Assessment is not available yet');
+    }
+    if (assessment.startsAt && now < assessment.startsAt) {
+      throw new UnauthorizedException('Assessment has not started yet');
+    }
+    if ((assessment.availableUntil && now > assessment.availableUntil) || (assessment.endsAt && now > assessment.endsAt)) {
+      throw new UnauthorizedException('Assessment availability window has ended');
+    }
+  }
+
+  private mapAttempt(attempt: {
+    id: string;
+    status: string;
+    attemptNumber: number;
+    startedAt: Date;
+    submittedAt: Date | null;
+    requiresManualReview: boolean;
+    answers: Array<{
+      questionId: string;
+      selectedOptionId: string | null;
+      answerText: string | null;
+      awardedMarks: unknown;
+      isCorrect: boolean | null;
+      feedback: string | null;
+    }>;
+    result: {
+      obtainedMarks: unknown;
+      totalMarks: unknown;
+      percentage: unknown;
+      status: string;
+    } | null;
+  }): PortalAssessmentAttemptDto {
+    return {
+      id: attempt.id,
+      status: attempt.status as PortalAssessmentAttemptDto['status'],
+      attemptNumber: attempt.attemptNumber,
+      startedAt: attempt.startedAt,
+      submittedAt: attempt.submittedAt,
+      requiresManualReview: attempt.requiresManualReview,
+      obtainedMarks: attempt.result ? Number(attempt.result.obtainedMarks) : null,
+      totalMarks: attempt.result ? Number(attempt.result.totalMarks) : null,
+      percentage: attempt.result ? Number(attempt.result.percentage) : null,
+      resultStatus: (attempt.result?.status as PortalAssessmentAttemptDto['resultStatus']) ?? null,
+      answers: attempt.answers.map((answer) => ({
+        questionId: answer.questionId,
+        selectedOptionId: answer.selectedOptionId,
+        answerText: answer.answerText,
+        awardedMarks: answer.awardedMarks !== null ? Number(answer.awardedMarks) : null,
+        isCorrect: answer.isCorrect,
+        feedback: answer.feedback,
+      })),
     };
   }
 }

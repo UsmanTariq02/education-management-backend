@@ -81,5 +81,27 @@ export interface PortalDashboardDto {
       room: string | null;
       batchName: string;
     }>;
+    assessmentSummary: {
+      availableCount: number;
+      inProgressCount: number;
+      completedCount: number;
+      upcoming: Array<{
+        id: string;
+        title: string;
+        subjectName: string;
+        type: string;
+        availableUntil: Date | null;
+        durationMinutes: number;
+      }>;
+      recentAttempts: Array<{
+        attemptId: string;
+        assessmentId: string;
+        title: string;
+        subjectName: string;
+        status: string;
+        percentage: number | null;
+        submittedAt: Date | null;
+      }>;
+    };
   };
 }
