@@ -15,6 +15,13 @@ const permissions = [
   'students.read',
   'students.update',
   'students.delete',
+  'portal-dashboard.read',
+  'portal-profile.read',
+  'portal-fees.read',
+  'portal-attendance.read',
+  'portal-results.read',
+  'portal-timetable.read',
+  'portal-reminders.read',
   'portal-access.read',
   'portal-access.manage',
   'student-documents.read',
@@ -709,13 +716,13 @@ async function main(): Promise<void> {
     create: { name: 'TEACHER', description: 'Teacher-facing academic and attendance user' },
   });
 
-  await prisma.role.upsert({
+  const studentRole = await prisma.role.upsert({
     where: { name: 'STUDENT' },
     update: { description: 'Student portal identity role reference' },
     create: { name: 'STUDENT', description: 'Student portal identity role reference' },
   });
 
-  await prisma.role.upsert({
+  const parentRole = await prisma.role.upsert({
     where: { name: 'PARENT' },
     update: { description: 'Parent portal identity role reference' },
     create: { name: 'PARENT', description: 'Parent portal identity role reference' },
@@ -808,6 +815,34 @@ async function main(): Promise<void> {
     )
     .map((permission) => permission.name);
 
+  const studentPortalPermissionNames = permissionRecords
+    .filter((permission) =>
+      [
+        'portal-dashboard.read',
+        'portal-profile.read',
+        'portal-fees.read',
+        'portal-attendance.read',
+        'portal-results.read',
+        'portal-timetable.read',
+        'portal-reminders.read',
+      ].includes(permission.name),
+    )
+    .map((permission) => permission.name);
+
+  const parentPortalPermissionNames = permissionRecords
+    .filter((permission) =>
+      [
+        'portal-dashboard.read',
+        'portal-profile.read',
+        'portal-fees.read',
+        'portal-attendance.read',
+        'portal-results.read',
+        'portal-timetable.read',
+        'portal-reminders.read',
+      ].includes(permission.name),
+    )
+    .map((permission) => permission.name);
+
   await prisma.rolePermission.deleteMany();
 
   for (const permission of permissionRecords) {
@@ -850,6 +885,24 @@ async function main(): Promise<void> {
     await prisma.rolePermission.create({
       data: {
         roleId: teacherRole.id,
+        permissionId: permission.id,
+      },
+    });
+  }
+
+  for (const permission of permissionRecords.filter((item) => studentPortalPermissionNames.includes(item.name))) {
+    await prisma.rolePermission.create({
+      data: {
+        roleId: studentRole.id,
+        permissionId: permission.id,
+      },
+    });
+  }
+
+  for (const permission of permissionRecords.filter((item) => parentPortalPermissionNames.includes(item.name))) {
+    await prisma.rolePermission.create({
+      data: {
+        roleId: parentRole.id,
         permissionId: permission.id,
       },
     });
