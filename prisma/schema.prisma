@@ -46,10 +46,13 @@ model Organization {
   studentExamResults             StudentExamResult[]
   studentExamResultItems         StudentExamResultItem[]
   portalAccounts                 PortalAccount[]
+  portalAcknowledgements         PortalAcknowledgement[]
   studentDocuments               StudentDocument[]
   organizationAssets             OrganizationAsset[]
+  announcements                  Announcement[]
   feePlans                       FeePlan[]
   feeRecords                     FeeRecord[]
+  feePaymentProofs               FeePaymentProof[]
   attendances                    Attendance[]
   reminders                      ReminderLog[]
   reminderTemplates              ReminderTemplate[]
@@ -193,6 +196,19 @@ enum PaymentMethod {
   ONLINE
   CHEQUE
   OTHER
+}
+
+enum AnnouncementAudience {
+  STUDENT
+  PARENT
+  BOTH
+}
+
+enum FeePaymentProofStatus {
+  PENDING
+  REVIEWED
+  ACCEPTED
+  REJECTED
 }
 
 enum ContactInquiryStatus {
@@ -417,7 +433,9 @@ model Student {
   assessmentAttempts             AssessmentAttempt[]
   assessmentResults              AssessmentResult[]
   portalAccounts                 PortalAccount[]
+  portalAcknowledgements         PortalAcknowledgement[]
   documents                      StudentDocument[]
+  feePaymentProofs               FeePaymentProof[]
   onlineClassParticipantSessions OnlineClassParticipantSession[]
 
   @@unique([organizationId, email])
@@ -442,11 +460,32 @@ model PortalAccount {
   updatedAt             DateTime          @updatedAt
   organization          Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   student               Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  acknowledgements      PortalAcknowledgement[]
+  submittedPaymentProofs FeePaymentProof[]
 
   @@unique([studentId, type])
   @@unique([organizationId, email, type])
   @@index([organizationId, type, isActive])
   @@index([studentId, type])
+}
+
+model PortalAcknowledgement {
+  id               String        @id @default(uuid()) @db.Uuid
+  organizationId   String        @db.Uuid
+  portalAccountId  String        @db.Uuid
+  studentId        String        @db.Uuid
+  itemKey          String        @db.VarChar(190)
+  itemKind         String        @db.VarChar(60)
+  title            String        @db.VarChar(180)
+  acknowledgedAt   DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  portalAccount    PortalAccount @relation(fields: [portalAccountId], references: [id], onDelete: Cascade)
+  student          Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([portalAccountId, itemKey])
+  @@index([organizationId, studentId, acknowledgedAt])
 }
 
 model StudentDocument {
@@ -489,6 +528,25 @@ model OrganizationAsset {
 
   @@index([organizationId, type])
   @@index([uploadedByUserId])
+}
+
+model Announcement {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  title          String               @db.VarChar(180)
+  body           String               @db.Text
+  category       String               @default("GENERAL") @db.VarChar(60)
+  audience       AnnouncementAudience @default(BOTH)
+  isPinned       Boolean              @default(false)
+  isPublished    Boolean              @default(true)
+  publishedAt    DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, audience, isPublished])
+  @@index([organizationId, publishedAt])
 }
 
 model Batch {
@@ -1013,10 +1071,39 @@ model FeeRecord {
   feePlan           FeePlan            @relation(fields: [feePlanId], references: [id], onDelete: Cascade)
   reminderLogs      ReminderLog[]
   reminderSchedules ReminderSchedule[]
+  paymentProofs     FeePaymentProof[]
 
   @@unique([studentId, feePlanId, month, year])
   @@index([status, year, month])
   @@index([organizationId, status])
+}
+
+model FeePaymentProof {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @db.Uuid
+  feeRecordId      String                @db.Uuid
+  studentId        String                @db.Uuid
+  portalAccountId  String                @db.Uuid
+  title            String                @db.VarChar(150)
+  notes            String?               @db.Text
+  originalName     String                @db.VarChar(255)
+  mimeType         String                @db.VarChar(120)
+  sizeBytes        Int
+  storagePath      String                @db.VarChar(500)
+  status           FeePaymentProofStatus @default(PENDING)
+  submittedAt      DateTime              @default(now())
+  reviewedAt       DateTime?
+  rejectionReason  String?               @db.Text
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  feeRecord        FeeRecord             @relation(fields: [feeRecordId], references: [id], onDelete: Cascade)
+  student          Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  portalAccount    PortalAccount         @relation(fields: [portalAccountId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, submittedAt])
+  @@index([feeRecordId, submittedAt])
+  @@index([studentId, submittedAt])
 }
 
 model Attendance {

@@ -1,8 +1,15 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { createReadStream } from 'fs';
+import { mkdir, writeFile } from 'fs/promises';
+import { extname, join } from 'path';
+import { Readable } from 'stream';
 import { AttendanceStatus } from '@prisma/client';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentPortalUserContext } from '../../common/interfaces/current-portal-user.interface';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AcknowledgePortalItemDto, PortalAcknowledgementItemDto } from './dto/portal-acknowledgements.dto';
+import { PortalAnnouncementDto } from './dto/portal-announcements.dto';
 import {
   PortalAssessmentDetailDto,
   PortalAssessmentListItemDto,
@@ -10,12 +17,19 @@ import {
   PortalAssessmentAttemptDto,
   SavePortalAssessmentAttemptDto,
 } from './dto/portal-assessments.dto';
+import { PortalActivityFeedItemDto } from './dto/portal-activity-feed.dto';
 import { PortalAssignmentDetailDto, PortalAssignmentListItemDto, PortalAssignmentSubmissionDto } from './dto/portal-assignments.dto';
+import { CreatePortalFeePaymentProofDto } from './dto/create-portal-fee-payment-proof.dto';
 import { PortalDashboardDto } from './dto/portal-dashboard.dto';
+import { PortalDocumentDto } from './dto/portal-documents.dto';
+import { PortalFeePaymentProofDto, PortalFeeRecordDto } from './dto/portal-fees.dto';
+import { PortalReportCardDto } from './dto/portal-report-card.dto';
 import { UpsertPortalAssignmentSubmissionDto } from '../assignments/dto/create-assignment.dto';
 
 @Injectable()
 export class PortalService {
+  private readonly portalUploadsRoot = join(process.cwd(), 'uploads', 'portal');
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getDashboard(actor: CurrentPortalUserContext): Promise<PortalDashboardDto> {
@@ -316,6 +330,952 @@ export class PortalService {
           : null,
       };
     });
+  }
+
+  async getReportCard(actor: CurrentPortalUserContext): Promise<PortalReportCardDto> {
+    const student = await this.prisma.student.findFirst({
+      where: {
+        id: actor.studentId,
+        organizationId: actor.organizationId,
+      },
+      include: {
+        organization: {
+          select: {
+            enabledModules: true,
+          },
+        },
+        studentBatches: {
+          include: {
+            batch: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+          },
+          orderBy: {
+            joinedAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Portal student context not found');
+    }
+
+    if (!(student.organization.enabledModules as string[]).includes(OrganizationModule.PORTALS)) {
+      throw new UnauthorizedException('Portal access is not enabled for this organization');
+    }
+
+    const [examResults, assessmentResults, assignmentSubmissions] = await Promise.all([
+      this.prisma.studentExamResult.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+          status: 'PUBLISHED',
+        },
+        include: {
+          resultItems: {
+            include: {
+              subject: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+              examSubject: {
+                select: {
+                  totalMarks: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.assessmentResult.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+          status: {
+            in: ['PROVISIONAL', 'FINALIZED'],
+          },
+        },
+        include: {
+          assessment: {
+            select: {
+              subject: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.assignmentSubmission.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+          status: 'REVIEWED',
+        },
+        include: {
+          assignment: {
+            select: {
+              subject: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+              maxMarks: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    type SubjectAggregate = {
+      subjectId: string;
+      subjectName: string;
+      subjectCode: string;
+      examPercentages: number[];
+      assessmentPercentages: number[];
+      assignmentPercentages: number[];
+    };
+
+    const bySubject = new Map<string, SubjectAggregate>();
+    const getSubjectAggregate = (subject: { id: string; name: string; code: string }): SubjectAggregate => {
+      const existing = bySubject.get(subject.id);
+      if (existing) {
+        return existing;
+      }
+
+      const created: SubjectAggregate = {
+        subjectId: subject.id,
+        subjectName: subject.name,
+        subjectCode: subject.code,
+        examPercentages: [],
+        assessmentPercentages: [],
+        assignmentPercentages: [],
+      };
+      bySubject.set(subject.id, created);
+      return created;
+    };
+
+    for (const examResult of examResults) {
+      for (const item of examResult.resultItems) {
+        const totalMarks = Number(item.examSubject.totalMarks);
+        if (!totalMarks) {
+          continue;
+        }
+
+        const aggregate = getSubjectAggregate(item.subject);
+        aggregate.examPercentages.push(Number(((Number(item.obtainedMarks) / totalMarks) * 100).toFixed(2)));
+      }
+    }
+
+    for (const assessmentResult of assessmentResults) {
+      const totalMarks = Number(assessmentResult.totalMarks);
+      if (!totalMarks) {
+        continue;
+      }
+
+      const aggregate = getSubjectAggregate(assessmentResult.assessment.subject);
+      aggregate.assessmentPercentages.push(Number(((Number(assessmentResult.obtainedMarks) / totalMarks) * 100).toFixed(2)));
+    }
+
+    for (const submission of assignmentSubmissions) {
+      const awardedMarks = submission.awardedMarks !== null ? Number(submission.awardedMarks) : null;
+      const totalMarks = Number(submission.assignment.maxMarks);
+      if (awardedMarks === null || !totalMarks) {
+        continue;
+      }
+
+      const aggregate = getSubjectAggregate(submission.assignment.subject);
+      aggregate.assignmentPercentages.push(Number(((awardedMarks / totalMarks) * 100).toFixed(2)));
+    }
+
+    const average = (values: number[]): number | null =>
+      values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)) : null;
+
+    const subjectBreakdown = Array.from(bySubject.values())
+      .map((subject) => {
+        const examPercentage = average(subject.examPercentages);
+        const assessmentPercentage = average(subject.assessmentPercentages);
+        const assignmentPercentage = average(subject.assignmentPercentages);
+        const combinedComponents = [examPercentage, assessmentPercentage, assignmentPercentage].filter(
+          (value): value is number => value !== null,
+        );
+
+        return {
+          subjectId: subject.subjectId,
+          subjectName: subject.subjectName,
+          subjectCode: subject.subjectCode,
+          examPercentage,
+          assessmentPercentage,
+          assignmentPercentage,
+          combinedPercentage: combinedComponents.length
+            ? Number((combinedComponents.reduce((sum, value) => sum + value, 0) / combinedComponents.length).toFixed(2))
+            : null,
+        };
+      })
+      .sort((left, right) => left.subjectName.localeCompare(right.subjectName));
+
+    const examAverage = average(subjectBreakdown.map((item) => item.examPercentage).filter((value): value is number => value !== null));
+    const assessmentAverage = average(
+      subjectBreakdown.map((item) => item.assessmentPercentage).filter((value): value is number => value !== null),
+    );
+    const assignmentAverage = average(
+      subjectBreakdown.map((item) => item.assignmentPercentage).filter((value): value is number => value !== null),
+    );
+    const overallValues = subjectBreakdown.map((item) => item.combinedPercentage).filter((value): value is number => value !== null);
+    const overallPercentage = average(overallValues) ?? 0;
+    const currentBatch = student.studentBatches[0]?.batch ?? {
+      id: 'unassigned',
+      name: 'Unassigned batch',
+      code: 'N/A',
+    };
+
+    return {
+      studentId: student.id,
+      studentName: student.fullName,
+      batchName: currentBatch.name,
+      batchCode: currentBatch.code,
+      overallPercentage,
+      overallGrade: this.toLetterGrade(overallPercentage),
+      examPercentage: examAverage,
+      assessmentPercentage: assessmentAverage,
+      assignmentPercentage: assignmentAverage,
+      publishedExamCount: examResults.length,
+      finalizedAssessmentCount: assessmentResults.filter((item) => item.status === 'FINALIZED').length,
+      reviewedAssignmentCount: assignmentSubmissions.length,
+      subjectBreakdown,
+    };
+  }
+
+  async getActivityFeed(actor: CurrentPortalUserContext): Promise<PortalActivityFeedItemDto[]> {
+    const student = await this.prisma.student.findFirst({
+      where: {
+        id: actor.studentId,
+        organizationId: actor.organizationId,
+      },
+      include: {
+        organization: {
+          select: {
+            enabledModules: true,
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Portal student context not found');
+    }
+
+    if (!(student.organization.enabledModules as string[]).includes(OrganizationModule.PORTALS)) {
+      throw new UnauthorizedException('Portal access is not enabled for this organization');
+    }
+
+    const [reminders, assignmentFeedback, assessmentFeedback, publishedResults] = await Promise.all([
+      this.prisma.reminderLog.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+      }),
+      this.prisma.assignmentSubmission.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+          status: 'REVIEWED',
+        },
+        include: {
+          assignment: {
+            select: {
+              title: true,
+              maxMarks: true,
+              subject: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+          reviewedByTeacher: {
+            select: {
+              fullName: true,
+            },
+          },
+        },
+        orderBy: { reviewedAt: 'desc' },
+        take: 12,
+      }),
+      this.prisma.assessmentAnswer.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          attempt: {
+            studentId: actor.studentId,
+          },
+          reviewedAt: {
+            not: null,
+          },
+          feedback: {
+            not: null,
+          },
+        },
+        include: {
+          question: {
+            select: {
+              prompt: true,
+              assessment: {
+                select: {
+                  title: true,
+                  subject: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          reviewedByTeacher: {
+            select: {
+              fullName: true,
+            },
+          },
+        },
+        orderBy: { reviewedAt: 'desc' },
+        take: 12,
+      }),
+      this.prisma.studentExamResult.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+          status: 'PUBLISHED',
+        },
+        include: {
+          exam: {
+            select: {
+              name: true,
+            },
+          },
+          batch: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: { publishedAt: 'desc' },
+        take: 12,
+      }),
+    ]);
+
+    const items: PortalActivityFeedItemDto[] = [
+      ...reminders.map((item) => ({
+        id: `reminder-${item.id}`,
+        kind: 'REMINDER' as const,
+        title: `${item.channel} reminder`,
+        description: item.message,
+        occurredAt: item.createdAt,
+        status: item.status,
+        subjectName: null,
+        scoreLabel: null,
+        actorName: null,
+      })),
+      ...assignmentFeedback
+        .filter((item) => item.reviewedAt)
+        .map((item) => ({
+          id: `assignment-feedback-${item.id}`,
+          kind: 'ASSIGNMENT_FEEDBACK' as const,
+          title: `Assignment reviewed: ${item.assignment.title}`,
+          description: item.feedback?.trim() || 'Teacher reviewed this assignment and published marks.',
+          occurredAt: item.reviewedAt as Date,
+          status: item.status,
+          subjectName: item.assignment.subject.name,
+          scoreLabel:
+            item.awardedMarks !== null ? `${Number(item.awardedMarks)}/${Number(item.assignment.maxMarks)} marks` : null,
+          actorName: item.reviewedByTeacher?.fullName ?? null,
+        })),
+      ...assessmentFeedback.map((item) => ({
+        id: `assessment-feedback-${item.id}`,
+        kind: 'ASSESSMENT_FEEDBACK' as const,
+        title: `Assessment feedback: ${item.question.assessment.title}`,
+        description: item.feedback?.trim() || `Teacher reviewed: ${item.question.prompt}`,
+        occurredAt: item.reviewedAt as Date,
+        status: 'REVIEWED',
+        subjectName: item.question.assessment.subject.name,
+        scoreLabel: item.awardedMarks !== null ? `${Number(item.awardedMarks)} marks awarded` : null,
+        actorName: item.reviewedByTeacher?.fullName ?? null,
+      })),
+      ...publishedResults
+        .filter((item) => item.publishedAt)
+        .map((item) => ({
+          id: `result-${item.id}`,
+          kind: 'RESULT_PUBLISHED' as const,
+          title: `Result published: ${item.exam.name}`,
+          description: `Published for ${item.batch.name} with grade ${item.grade ?? 'pending'}.`,
+          occurredAt: item.publishedAt as Date,
+          status: item.status,
+          subjectName: null,
+          scoreLabel: `${Number(item.percentage)}%`,
+          actorName: null,
+        })),
+    ];
+
+    return items.sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime()).slice(0, 25);
+  }
+
+  async getAcknowledgements(actor: CurrentPortalUserContext): Promise<PortalAcknowledgementItemDto[]> {
+    const account = await this.getPortalAccountOrThrow(actor);
+    const portalAcknowledgementDelegate = (this.prisma as PrismaService & {
+      portalAcknowledgement: {
+        findMany: (args: {
+          where: { portalAccountId: string };
+        }) => Promise<Array<{ itemKey: string; acknowledgedAt: Date }>>;
+        upsert: (args: {
+          where: { portalAccountId_itemKey: { portalAccountId: string; itemKey: string } };
+          update: { itemKind: string; title: string; acknowledgedAt: Date };
+          create: {
+            organizationId: string;
+            portalAccountId: string;
+            studentId: string;
+            itemKey: string;
+            itemKind: string;
+            title: string;
+          };
+        }) => Promise<{
+          itemKey: string;
+          itemKind: string;
+          title: string;
+          updatedAt: Date;
+          acknowledgedAt: Date;
+        }>;
+      };
+    }).portalAcknowledgement as {
+      findMany: (args: {
+        where: { portalAccountId: string };
+      }) => Promise<Array<{ itemKey: string; acknowledgedAt: Date }>>;
+      upsert: (args: {
+        where: { portalAccountId_itemKey: { portalAccountId: string; itemKey: string } };
+        update: { itemKind: string; title: string; acknowledgedAt: Date };
+        create: {
+          organizationId: string;
+          portalAccountId: string;
+          studentId: string;
+          itemKey: string;
+          itemKind: string;
+          title: string;
+        };
+      }) => Promise<{
+        itemKey: string;
+        itemKind: string;
+        title: string;
+        updatedAt: Date;
+        acknowledgedAt: Date;
+      }>;
+    };
+
+    const [feeRecords, assignmentSubmissions, assessmentResults, examResults, acknowledgements] = await Promise.all([
+      this.prisma.feeRecord.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+          status: { in: ['OVERDUE', 'PENDING', 'PARTIAL'] },
+        },
+        orderBy: [{ year: 'desc' }, { month: 'desc' }],
+        take: 8,
+      }),
+      this.prisma.assignmentSubmission.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+          status: 'REVIEWED',
+        },
+        include: {
+          assignment: {
+            select: {
+              id: true,
+              title: true,
+              maxMarks: true,
+              subject: { select: { name: true } },
+            },
+          },
+          reviewedByTeacher: { select: { fullName: true } },
+        },
+        orderBy: { reviewedAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.assessmentResult.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+          status: { in: ['PROVISIONAL', 'FINALIZED'] },
+        },
+        include: {
+          assessment: {
+            select: {
+              id: true,
+              title: true,
+              subject: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.studentExamResult.findMany({
+        where: {
+          organizationId: actor.organizationId,
+          studentId: actor.studentId,
+          status: 'PUBLISHED',
+        },
+        include: {
+          exam: { select: { id: true, name: true } },
+        },
+        orderBy: { publishedAt: 'desc' },
+        take: 10,
+      }),
+      portalAcknowledgementDelegate.findMany({
+        where: {
+          portalAccountId: account.id,
+        },
+      }),
+    ]);
+
+    const ackMap = new Map<string, { acknowledgedAt: Date }>(acknowledgements.map((item: { itemKey: string; acknowledgedAt: Date }) => [item.itemKey, item]));
+
+    const items: PortalAcknowledgementItemDto[] = [
+      ...feeRecords.map((item: (typeof feeRecords)[number]) => {
+        const itemKey = `fee:${item.id}`;
+        return {
+          itemKey,
+          kind: 'FEE_DUE' as const,
+          title: `Fee cycle ${item.month}/${item.year} needs attention`,
+          description: `Outstanding amount is ${Number(item.amountDue) - Number(item.amountPaid)} with status ${item.status}.`,
+          occurredAt: item.updatedAt,
+          acknowledgedAt: ackMap.get(itemKey)?.acknowledgedAt ?? null,
+          actorName: null,
+          subjectName: null,
+          scoreLabel: null,
+        };
+      }),
+      ...assignmentSubmissions
+        .filter((item: (typeof assignmentSubmissions)[number]) => item.reviewedAt)
+        .map((item: (typeof assignmentSubmissions)[number]) => {
+          const itemKey = `assignment-review:${item.assignment.id}:${item.id}`;
+          return {
+            itemKey,
+            kind: 'ASSIGNMENT_FEEDBACK' as const,
+            title: `Review acknowledged for ${item.assignment.title}`,
+            description: item.feedback?.trim() || 'Teacher feedback and marks were posted for this assignment.',
+            occurredAt: item.reviewedAt as Date,
+            acknowledgedAt: ackMap.get(itemKey)?.acknowledgedAt ?? null,
+            actorName: item.reviewedByTeacher?.fullName ?? null,
+            subjectName: item.assignment.subject.name,
+            scoreLabel:
+              item.awardedMarks !== null ? `${Number(item.awardedMarks)}/${Number(item.assignment.maxMarks)} marks` : null,
+          };
+        }),
+      ...assessmentResults.map((item: (typeof assessmentResults)[number]) => {
+        const itemKey = `assessment-result:${item.assessment.id}:${item.id}`;
+        return {
+          itemKey,
+          kind: 'ASSESSMENT_RESULT' as const,
+          title: `Assessment result available for ${item.assessment.title}`,
+          description: `The latest assessment result is ${item.status.toLowerCase()} and ready for acknowledgement.`,
+          occurredAt: item.updatedAt,
+          acknowledgedAt: ackMap.get(itemKey)?.acknowledgedAt ?? null,
+          actorName: null,
+          subjectName: item.assessment.subject.name,
+          scoreLabel: `${Number(item.percentage)}%`,
+        };
+      }),
+      ...examResults
+        .filter((item: (typeof examResults)[number]) => item.publishedAt)
+        .map((item: (typeof examResults)[number]) => {
+          const itemKey = `exam-result:${item.exam.id}:${item.id}`;
+          return {
+            itemKey,
+            kind: 'EXAM_RESULT' as const,
+            title: `Published exam result: ${item.exam.name}`,
+            description: `Exam result is available with grade ${item.grade ?? 'pending'}.`,
+            occurredAt: item.publishedAt as Date,
+            acknowledgedAt: ackMap.get(itemKey)?.acknowledgedAt ?? null,
+            actorName: null,
+            subjectName: null,
+            scoreLabel: `${Number(item.percentage)}%`,
+          };
+        }),
+    ];
+
+    return items.sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime()).slice(0, 30);
+  }
+
+  async acknowledgeItem(payload: AcknowledgePortalItemDto, actor: CurrentPortalUserContext): Promise<PortalAcknowledgementItemDto> {
+    const account = await this.getPortalAccountOrThrow(actor);
+    const portalAcknowledgementDelegate = (this.prisma as PrismaService & {
+      portalAcknowledgement: {
+        upsert: (args: {
+          where: { portalAccountId_itemKey: { portalAccountId: string; itemKey: string } };
+          update: { itemKind: string; title: string; acknowledgedAt: Date };
+          create: {
+            organizationId: string;
+            portalAccountId: string;
+            studentId: string;
+            itemKey: string;
+            itemKind: string;
+            title: string;
+          };
+        }) => Promise<{
+          itemKey: string;
+          itemKind: string;
+          title: string;
+          updatedAt: Date;
+          acknowledgedAt: Date;
+        }>;
+      };
+    }).portalAcknowledgement;
+
+    const saved = await portalAcknowledgementDelegate.upsert({
+      where: {
+        portalAccountId_itemKey: {
+          portalAccountId: account.id,
+          itemKey: payload.itemKey,
+        },
+      },
+      update: {
+        itemKind: payload.kind,
+        title: payload.title,
+        acknowledgedAt: new Date(),
+      },
+      create: {
+        organizationId: actor.organizationId,
+        portalAccountId: account.id,
+        studentId: actor.studentId,
+        itemKey: payload.itemKey,
+        itemKind: payload.kind,
+        title: payload.title,
+      },
+    });
+
+    return {
+      itemKey: saved.itemKey,
+      kind: this.toAcknowledgementKind(saved.itemKind),
+      title: saved.title,
+      description: 'Acknowledgement saved.',
+      occurredAt: saved.updatedAt,
+      acknowledgedAt: saved.acknowledgedAt,
+      actorName: null,
+      subjectName: null,
+      scoreLabel: null,
+    };
+  }
+
+  async getDocuments(actor: CurrentPortalUserContext): Promise<PortalDocumentDto[]> {
+    await this.getPortalAccountOrThrow(actor);
+
+    const uploadedDocuments = await this.prisma.studentDocument.findMany({
+      where: {
+        organizationId: actor.organizationId,
+        studentId: actor.studentId,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    const generatedDocuments: PortalDocumentDto[] = [
+      {
+        id: 'generated:unified-report-card-pdf',
+        title: 'Unified Report Card PDF',
+        kind: 'GENERATED',
+        category: 'ACADEMIC',
+        fileName: 'unified-report-card.pdf',
+        mimeType: 'application/pdf',
+        createdAt: new Date(),
+        description: 'Printable academic PDF built from current exam, assessment, and assignment data.',
+      },
+      {
+        id: 'generated:activity-timeline-pdf',
+        title: 'Portal Activity Timeline PDF',
+        kind: 'GENERATED',
+        category: 'ACADEMIC',
+        fileName: 'portal-activity-timeline.pdf',
+        mimeType: 'application/pdf',
+        createdAt: new Date(),
+        description: 'Printable timeline PDF covering reminders, teacher feedback, and result publication activity.',
+      },
+      {
+        id: 'generated:unified-report-card-csv',
+        title: 'Unified Report Card CSV',
+        kind: 'GENERATED',
+        category: 'ACADEMIC',
+        fileName: 'unified-report-card.csv',
+        mimeType: 'text/csv',
+        createdAt: new Date(),
+        description: 'Spreadsheet export of current combined academic performance.',
+      },
+      {
+        id: 'generated:activity-timeline-csv',
+        title: 'Portal Activity Timeline CSV',
+        kind: 'GENERATED',
+        category: 'ACADEMIC',
+        fileName: 'portal-activity-timeline.csv',
+        mimeType: 'text/csv',
+        createdAt: new Date(),
+        description: 'Spreadsheet export of recent reminders, feedback, and published result events.',
+      },
+    ];
+
+    return [
+      ...generatedDocuments,
+      ...uploadedDocuments.map((document) => ({
+        id: `uploaded:${document.id}`,
+        title: document.title,
+        kind: 'UPLOADED' as const,
+        category: (document.type === 'ACADEMIC_RECORD' ? 'ACADEMIC' : 'STUDENT_RECORD') as 'ACADEMIC' | 'STUDENT_RECORD',
+        fileName: document.originalName,
+        mimeType: document.mimeType,
+        createdAt: document.createdAt,
+        description: document.notes,
+      })),
+    ];
+  }
+
+  async getDocumentDownload(documentId: string, actor: CurrentPortalUserContext): Promise<{
+    filename: string;
+    mimeType: string;
+    stream: Readable;
+  }> {
+    await this.getPortalAccountOrThrow(actor);
+
+    if (documentId === 'generated:unified-report-card-pdf') {
+      const reportCard = await this.getReportCard(actor);
+      const lines = [
+        'Unified Report Card',
+        `${reportCard.studentName} · ${reportCard.batchName} (${reportCard.batchCode})`,
+        `Overall: ${reportCard.overallPercentage}% · Grade ${reportCard.overallGrade}`,
+        '',
+        ...reportCard.subjectBreakdown.flatMap((item) => [
+          `${item.subjectName} (${item.subjectCode})`,
+          `Exam ${item.examPercentage ?? '-'}% | Assessment ${item.assessmentPercentage ?? '-'}% | Assignment ${item.assignmentPercentage ?? '-'}% | Combined ${item.combinedPercentage ?? '-'}%`,
+          '',
+        ]),
+      ];
+      return {
+        filename: 'unified-report-card.pdf',
+        mimeType: 'application/pdf',
+        stream: Readable.from([this.generateSimplePdf(lines)]),
+      };
+    }
+
+    if (documentId === 'generated:activity-timeline-pdf') {
+      const feed = await this.getActivityFeed(actor);
+      const lines = [
+        'Portal Activity Timeline',
+        ...feed.slice(0, 20).flatMap((item) => [
+          `${item.title}`,
+          `${item.occurredAt.toISOString()} | ${item.kind}${item.scoreLabel ? ` | ${item.scoreLabel}` : ''}`,
+          item.description,
+          '',
+        ]),
+      ];
+      return {
+        filename: 'portal-activity-timeline.pdf',
+        mimeType: 'application/pdf',
+        stream: Readable.from([this.generateSimplePdf(lines)]),
+      };
+    }
+
+    if (documentId === 'generated:unified-report-card-csv') {
+      const reportCard = await this.getReportCard(actor);
+      const header = 'Subject Code,Subject Name,Exam %,Assessment %,Assignment %,Combined %';
+      const rows = reportCard.subjectBreakdown.map(
+        (item) =>
+          `${item.subjectCode},${this.escapeCsv(item.subjectName)},${item.examPercentage ?? ''},${item.assessmentPercentage ?? ''},${item.assignmentPercentage ?? ''},${item.combinedPercentage ?? ''}`,
+      );
+      const summary = `Overall,,${reportCard.examPercentage ?? ''},${reportCard.assessmentPercentage ?? ''},${reportCard.assignmentPercentage ?? ''},${reportCard.overallPercentage}`;
+      return {
+        filename: 'unified-report-card.csv',
+        mimeType: 'text/csv',
+        stream: Readable.from([`${header}\n${rows.join('\n')}\n${summary}\n`]),
+      };
+    }
+
+    if (documentId === 'generated:activity-timeline-csv') {
+      const feed = await this.getActivityFeed(actor);
+      const header = 'Date,Kind,Title,Description,Status,Subject,Score,Actor';
+      const rows = feed.map(
+        (item) =>
+          `${item.occurredAt.toISOString()},${item.kind},${this.escapeCsv(item.title)},${this.escapeCsv(item.description)},${item.status ?? ''},${item.subjectName ?? ''},${item.scoreLabel ?? ''},${item.actorName ?? ''}`,
+      );
+      return {
+        filename: 'portal-activity-timeline.csv',
+        mimeType: 'text/csv',
+        stream: Readable.from([`${header}\n${rows.join('\n')}\n`]),
+      };
+    }
+
+    if (!documentId.startsWith('uploaded:')) {
+      throw new NotFoundException('Portal document not found');
+    }
+
+    const uploadedId = documentId.replace('uploaded:', '');
+    const document = await this.prisma.studentDocument.findFirst({
+      where: {
+        id: uploadedId,
+        organizationId: actor.organizationId,
+        studentId: actor.studentId,
+      },
+    });
+
+    if (!document) {
+      throw new NotFoundException('Portal document not found');
+    }
+
+    return {
+      filename: document.originalName,
+      mimeType: document.mimeType,
+      stream: createReadStream(document.storagePath),
+    };
+  }
+
+  async getAnnouncements(actor: CurrentPortalUserContext): Promise<PortalAnnouncementDto[]> {
+    await this.getPortalAccountOrThrow(actor);
+
+    const announcements = await this.prisma.announcement.findMany({
+      where: {
+        organizationId: actor.organizationId,
+        isPublished: true,
+        AND: [
+          {
+            OR: [{ audience: actor.accountType }, { audience: 'BOTH' }],
+          },
+          {
+            OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
+          },
+        ],
+      },
+      orderBy: [{ isPinned: 'desc' }, { publishedAt: 'desc' }, { createdAt: 'desc' }],
+      take: 20,
+    });
+
+    return announcements.map((item) => ({
+      id: item.id,
+      title: item.title,
+      body: item.body,
+      category: item.category,
+      audience: item.audience,
+      isPinned: item.isPinned,
+      publishedAt: item.publishedAt,
+      expiresAt: item.expiresAt,
+    }));
+  }
+
+  async getFees(actor: CurrentPortalUserContext): Promise<PortalFeeRecordDto[]> {
+    await this.getPortalAccountOrThrow(actor);
+
+    const feeRecords = await this.prisma.feeRecord.findMany({
+      where: {
+        organizationId: actor.organizationId,
+        studentId: actor.studentId,
+      },
+      include: {
+        paymentProofs: {
+          orderBy: { submittedAt: 'desc' },
+        },
+      },
+      orderBy: [{ year: 'desc' }, { month: 'desc' }],
+      take: 18,
+    });
+
+    return feeRecords.map((item) => ({
+      id: item.id,
+      month: item.month,
+      year: item.year,
+      amountDue: Number(item.amountDue),
+      amountPaid: Number(item.amountPaid),
+      pendingAmount: Math.max(Number(item.amountDue) - Number(item.amountPaid), 0),
+      status: item.status,
+      paidAt: item.paidAt,
+      remarks: item.remarks,
+      paymentMethod: item.paymentMethod ?? null,
+      proofs: item.paymentProofs.map((proof) => this.mapPaymentProof(proof)),
+    }));
+  }
+
+  async uploadPaymentProof(
+    feeRecordId: string,
+    payload: CreatePortalFeePaymentProofDto,
+    file: Express.Multer.File,
+    actor: CurrentPortalUserContext,
+  ): Promise<PortalFeePaymentProofDto> {
+    if (actor.accountType !== 'PARENT') {
+      throw new UnauthorizedException('Only parent portal accounts can upload payment proofs');
+    }
+
+    const account = await this.getPortalAccountOrThrow(actor);
+    const feeRecord = await this.prisma.feeRecord.findFirst({
+      where: {
+        id: feeRecordId,
+        organizationId: actor.organizationId,
+        studentId: actor.studentId,
+      },
+    });
+
+    if (!feeRecord) {
+      throw new NotFoundException('Fee record not found');
+    }
+
+    const storagePath = await this.storePortalFile(file, 'fee-proofs', actor.organizationId, actor.studentId);
+    const proof = await this.prisma.feePaymentProof.create({
+      data: {
+        organizationId: actor.organizationId,
+        feeRecordId: feeRecord.id,
+        studentId: actor.studentId,
+        portalAccountId: account.id,
+        title: payload.title,
+        notes: payload.notes,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        sizeBytes: file.size,
+        storagePath,
+      },
+    });
+
+    return this.mapPaymentProof(proof);
+  }
+
+  async getPaymentProofDownload(
+    proofId: string,
+    actor: CurrentPortalUserContext,
+  ): Promise<{ filename: string; mimeType: string; stream: Readable }> {
+    await this.getPortalAccountOrThrow(actor);
+    const proof = await this.prisma.feePaymentProof.findFirst({
+      where: {
+        id: proofId,
+        organizationId: actor.organizationId,
+        studentId: actor.studentId,
+      },
+    });
+
+    if (!proof) {
+      throw new NotFoundException('Payment proof not found');
+    }
+
+    return {
+      filename: proof.originalName,
+      mimeType: proof.mimeType,
+      stream: createReadStream(proof.storagePath),
+    };
   }
 
   async getAssignments(actor: CurrentPortalUserContext): Promise<PortalAssignmentListItemDto[]> {
@@ -967,5 +1927,142 @@ export class PortalService {
       awardedMarks: submission.awardedMarks !== null ? Number(submission.awardedMarks) : null,
       reviewedByTeacherName: submission.reviewedByTeacher?.fullName ?? null,
     };
+  }
+
+  private toLetterGrade(percentage: number): string {
+    if (percentage >= 90) {
+      return 'A+';
+    }
+    if (percentage >= 80) {
+      return 'A';
+    }
+    if (percentage >= 70) {
+      return 'B';
+    }
+    if (percentage >= 60) {
+      return 'C';
+    }
+    if (percentage >= 50) {
+      return 'D';
+    }
+    return 'F';
+  }
+
+  private async getPortalAccountOrThrow(actor: CurrentPortalUserContext) {
+    const account = await this.prisma.portalAccount.findFirst({
+      where: {
+        id: actor.accountId,
+        organizationId: actor.organizationId,
+        studentId: actor.studentId,
+        type: actor.accountType,
+        isActive: true,
+      },
+    });
+
+    if (!account) {
+      throw new NotFoundException('Portal account not found');
+    }
+
+    return account;
+  }
+
+  private toAcknowledgementKind(kind: string): PortalAcknowledgementItemDto['kind'] {
+    if (kind === 'FEE_DUE' || kind === 'ASSIGNMENT_FEEDBACK' || kind === 'ASSESSMENT_RESULT' || kind === 'EXAM_RESULT') {
+      return kind;
+    }
+    return 'FEE_DUE';
+  }
+
+  private mapPaymentProof(proof: {
+    id: string;
+    title: string;
+    notes: string | null;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    status: string;
+    submittedAt: Date;
+    reviewedAt: Date | null;
+    rejectionReason: string | null;
+  }): PortalFeePaymentProofDto {
+    return {
+      id: proof.id,
+      title: proof.title,
+      notes: proof.notes,
+      originalName: proof.originalName,
+      mimeType: proof.mimeType,
+      sizeBytes: proof.sizeBytes,
+      status: proof.status as PortalFeePaymentProofDto['status'],
+      submittedAt: proof.submittedAt,
+      reviewedAt: proof.reviewedAt,
+      rejectionReason: proof.rejectionReason,
+    };
+  }
+
+  private async storePortalFile(
+    file: Express.Multer.File,
+    bucket: 'fee-proofs',
+    organizationId: string,
+    studentId: string,
+  ): Promise<string> {
+    const extension = extname(file.originalname);
+    const basePath = join(this.portalUploadsRoot, bucket, organizationId, studentId);
+    await mkdir(basePath, { recursive: true });
+    const filename = `${randomUUID()}${extension}`;
+    const storagePath = join(basePath, filename);
+    await writeFile(storagePath, file.buffer);
+    return storagePath;
+  }
+
+  private generateSimplePdf(lines: string[]): Buffer {
+    const pageWidth = 595;
+    const pageHeight = 842;
+    const fontSize = 12;
+    const left = 48;
+    const top = 800;
+    const lineHeight = 16;
+    let y = top;
+    const contentLines: string[] = ['BT', `/F1 ${fontSize} Tf`];
+
+    for (const line of lines) {
+      if (y < 60) {
+        break;
+      }
+      contentLines.push(`${left} ${y} Td (${this.escapePdfText(line)}) Tj`);
+      y -= lineHeight;
+    }
+    contentLines.push('ET');
+    const content = contentLines.join('\n');
+    const objects = [
+      '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+      '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+      `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj`,
+      '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
+      `5 0 obj << /Length ${Buffer.byteLength(content, 'utf8')} >> stream\n${content}\nendstream endobj`,
+    ];
+    let pdf = '%PDF-1.4\n';
+    const offsets: number[] = [0];
+    for (const object of objects) {
+      offsets.push(Buffer.byteLength(pdf, 'utf8'));
+      pdf += `${object}\n`;
+    }
+    const xrefStart = Buffer.byteLength(pdf, 'utf8');
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    for (let index = 1; index < offsets.length; index += 1) {
+      pdf += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`;
+    }
+    pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+    return Buffer.from(pdf, 'utf8');
+  }
+
+  private escapePdfText(value: string): string {
+    return value.replaceAll('\\', '\\\\').replaceAll('(', '\\(').replaceAll(')', '\\)').replace(/\r?\n/g, ' ');
+  }
+
+  private escapeCsv(value: string): string {
+    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+      return `"${value.replaceAll('"', '""')}"`;
+    }
+    return value;
   }
 }
