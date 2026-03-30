@@ -36,6 +36,8 @@ model Organization {
   batchSubjectAssignments        BatchSubjectAssignment[]
   timetableEntries               TimetableEntry[]
   exams                          Exam[]
+  assignments                    Assignment[]
+  assignmentSubmissions          AssignmentSubmission[]
   assessments                    Assessment[]
   assessmentQuestions            AssessmentQuestion[]
   assessmentAttempts             AssessmentAttempt[]
@@ -243,6 +245,18 @@ enum StudentExamResultStatus {
   PUBLISHED
 }
 
+enum AssignmentStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum AssignmentSubmissionStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+}
+
 enum AssessmentType {
   QUIZ
   TEST
@@ -399,6 +413,7 @@ model Student {
   reminderLogs                   ReminderLog[]
   reminderSchedules              ReminderSchedule[]
   examResults                    StudentExamResult[]
+  assignmentSubmissions          AssignmentSubmission[]
   assessmentAttempts             AssessmentAttempt[]
   assessmentResults              AssessmentResult[]
   portalAccounts                 PortalAccount[]
@@ -494,6 +509,7 @@ model Batch {
   timetableEntries    TimetableEntry[]
   onlineClassSessions OnlineClassSession[]
   exams               Exam[]
+  assignments         Assignment[]
   assessments         Assessment[]
   examResults         StudentExamResult[]
   feePlans            FeePlan[]
@@ -522,6 +538,7 @@ model AcademicSession {
   timetableEntries        TimetableEntry[]
   onlineClassSessions     OnlineClassSession[]
   exams                   Exam[]
+  assignments             Assignment[]
   assessments             Assessment[]
   studentExamResults      StudentExamResult[]
 
@@ -544,6 +561,7 @@ model Subject {
   timetableEntries    TimetableEntry[]
   onlineClassSessions OnlineClassSession[]
   examSubjects        ExamSubject[]
+  assignments         Assignment[]
   assessments         Assessment[]
   assessmentQuestions AssessmentQuestion[]
   resultItems         StudentExamResultItem[]
@@ -573,6 +591,8 @@ model Teacher {
   timetableEntries    TimetableEntry[]
   onlineClassSessions OnlineClassSession[]
   exams               Exam[]
+  assignments         Assignment[]
+  reviewedAssignments AssignmentSubmission[]
   assessments         Assessment[]
   assessmentReviews   AssessmentAnswer[]
 
@@ -663,6 +683,61 @@ model Exam {
   @@unique([organizationId, code])
   @@index([organizationId, examDate])
   @@index([batchId, examDate])
+}
+
+model Assignment {
+  id                  String           @id @default(uuid()) @db.Uuid
+  organizationId      String           @db.Uuid
+  academicSessionId   String?          @db.Uuid
+  batchId             String           @db.Uuid
+  subjectId           String           @db.Uuid
+  teacherId           String?          @db.Uuid
+  title               String           @db.VarChar(180)
+  code                String           @db.VarChar(60)
+  description         String?          @db.Text
+  instructions        String?          @db.Text
+  status              AssignmentStatus @default(DRAFT)
+  maxMarks            Decimal          @default(100) @db.Decimal(10, 2)
+  dueAt               DateTime
+  allowLateSubmission Boolean          @default(false)
+  publishedAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  organization        Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  academicSession     AcademicSession? @relation(fields: [academicSessionId], references: [id], onDelete: SetNull)
+  batch               Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  subject             Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher             Teacher?         @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  submissions         AssignmentSubmission[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status, dueAt])
+  @@index([batchId, subjectId, dueAt])
+}
+
+model AssignmentSubmission {
+  id                  String                     @id @default(uuid()) @db.Uuid
+  organizationId      String                     @db.Uuid
+  assignmentId        String                     @db.Uuid
+  studentId           String                     @db.Uuid
+  status              AssignmentSubmissionStatus @default(DRAFT)
+  submissionText      String?                    @db.Text
+  attachmentLinks     String[]
+  submittedAt         DateTime?
+  reviewedAt          DateTime?
+  feedback            String?                    @db.Text
+  awardedMarks        Decimal?                   @db.Decimal(10, 2)
+  reviewedByTeacherId String?                    @db.Uuid
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignment          Assignment                 @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student             Student                    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reviewedByTeacher   Teacher?                   @relation(fields: [reviewedByTeacherId], references: [id], onDelete: SetNull)
+
+  @@unique([assignmentId, studentId])
+  @@index([organizationId, status, submittedAt])
+  @@index([studentId, status])
 }
 
 model Assessment {

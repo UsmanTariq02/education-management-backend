@@ -63,6 +63,10 @@ const permissions = [
   'exams.read',
   'exams.update',
   'exams.delete',
+  'assignments.create',
+  'assignments.read',
+  'assignments.update',
+  'assignments.delete',
   'assessments.create',
   'assessments.read',
   'assessments.update',
@@ -115,6 +119,8 @@ async function resetDemoOrganizationData(organizationId: string): Promise<void> 
   await prisma.studentExamResultItem.deleteMany({ where: { organizationId } });
   await prisma.studentExamResult.deleteMany({ where: { organizationId } });
   await prisma.examSubject.deleteMany({ where: { exam: { organizationId } } });
+  await prisma.assignmentSubmission.deleteMany({ where: { organizationId } });
+  await prisma.assignment.deleteMany({ where: { organizationId } });
   await prisma.assessmentResult.deleteMany({ where: { organizationId } });
   await prisma.assessmentAnswer.deleteMany({ where: { organizationId } });
   await prisma.assessmentAttempt.deleteMany({ where: { organizationId } });
@@ -1501,6 +1507,59 @@ async function seedNorthfieldLearningHub(params: {
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
     const batch = batches[batchIndex];
     const batchStudents = studentsByBatch[batchIndex];
+    const computerScienceTeacher = teachersByEmail['teacher.farhan@northfield-learning.edu'];
+
+    const assignment = await prisma.assignment.create({
+      data: {
+        organizationId: organization.id,
+        academicSessionId: currentSession.id,
+        batchId: batch.id,
+        subjectId: subjectByName['Computer Science'].id,
+        teacherId: computerScienceTeacher.id,
+        title: `${batch.name} Programming Reflection`,
+        code: `ASG-${batch.code}-CSC`,
+        description: 'Written assignment for lab reflection and algorithm thinking.',
+        instructions: 'Write your response in paragraph form and attach any useful reference links.',
+        status: 'PUBLISHED',
+        maxMarks: 20,
+        dueAt: new Date('2026-03-26T23:59:00.000Z'),
+        allowLateSubmission: batchIndex === 2,
+        publishedAt: new Date('2026-03-20T09:00:00.000Z'),
+      },
+    });
+
+    for (let studentIndex = 0; studentIndex < batchStudents.length; studentIndex += 1) {
+      const student = batchStudents[studentIndex];
+      const reviewBucket = studentIndex % 4;
+      const status = reviewBucket === 0 ? 'DRAFT' : reviewBucket === 1 ? 'SUBMITTED' : 'REVIEWED';
+      const submittedAt = status === 'DRAFT' ? null : new Date('2026-03-25T15:00:00.000Z');
+      const reviewedAt = status === 'REVIEWED' ? new Date('2026-03-27T12:00:00.000Z') : null;
+      const awardedMarks = status === 'REVIEWED' ? 12 + (studentIndex % 8) : null;
+
+      await prisma.assignmentSubmission.create({
+        data: {
+          organizationId: organization.id,
+          assignmentId: assignment.id,
+          studentId: student.id,
+          status,
+          submissionText: `${student.firstName} explained a simple app workflow, user inputs, and how logic can be broken into smaller reusable steps.`,
+          attachmentLinks:
+            status === 'DRAFT'
+              ? []
+              : [`https://example.edu/submissions/${batch.code.toLowerCase()}/${student.id.slice(0, 8)}`],
+          submittedAt,
+          reviewedAt,
+          feedback: status === 'REVIEWED' ? 'Clear thinking and good structure. Add more technical vocabulary next time.' : null,
+          awardedMarks,
+          reviewedByTeacherId: status === 'REVIEWED' ? computerScienceTeacher.id : null,
+        },
+      });
+    }
+  }
+
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+    const batch = batches[batchIndex];
+    const batchStudents = studentsByBatch[batchIndex];
     const mathematics = subjectByName['Mathematics'];
     const english = subjectByName['English'];
     const mathTeacher = teachersByEmail['teacher.hassan@northfield-learning.edu'];
@@ -2053,6 +2112,9 @@ async function main(): Promise<void> {
         'exams.create',
         'exams.read',
         'exams.update',
+        'assignments.create',
+        'assignments.read',
+        'assignments.update',
         'assessments.create',
         'assessments.read',
         'assessments.update',
@@ -2082,6 +2144,8 @@ async function main(): Promise<void> {
         'timetables.read',
         'online-classes.read',
         'exams.read',
+        'assignments.read',
+        'assignments.update',
         'assessments.read',
         'exam-results.read',
         'exam-results.create',

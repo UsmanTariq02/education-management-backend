@@ -1,5 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { REPORT_REPOSITORY } from '../../common/constants/injection-tokens';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { ReportRepository } from './interfaces/report.repository.interface';
 
@@ -109,6 +110,10 @@ export class ReportsService {
 
   async getAcademicDashboardSummary(actor: CurrentUserContext) {
     return this.reportRepository.getAcademicDashboardSummary(this.resolveOrganizationId(actor));
+  }
+
+  async getUnifiedReportCards(query: PaginationQueryDto, actor: CurrentUserContext) {
+    return this.reportRepository.getUnifiedReportCards(query, this.resolveOrganizationId(actor));
   }
 
   async getGradeDistribution(actor: CurrentUserContext) {

@@ -10,7 +10,9 @@ import {
   PortalAssessmentAttemptDto,
   SavePortalAssessmentAttemptDto,
 } from './dto/portal-assessments.dto';
+import { PortalAssignmentDetailDto, PortalAssignmentListItemDto, PortalAssignmentSubmissionDto } from './dto/portal-assignments.dto';
 import { PortalDashboardDto } from './dto/portal-dashboard.dto';
+import { UpsertPortalAssignmentSubmissionDto } from '../assignments/dto/create-assignment.dto';
 
 @Injectable()
 export class PortalService {
@@ -314,6 +316,143 @@ export class PortalService {
           : null,
       };
     });
+  }
+
+  async getAssignments(actor: CurrentPortalUserContext): Promise<PortalAssignmentListItemDto[]> {
+    const batchIds = await this.getStudentBatchIds(actor);
+    const assignments = await this.prisma.assignment.findMany({
+      where: {
+        organizationId: actor.organizationId,
+        batchId: { in: batchIds.length ? batchIds : ['00000000-0000-0000-0000-000000000000'] },
+        status: 'PUBLISHED',
+      },
+      include: {
+        subject: { select: { name: true } },
+        batch: { select: { name: true } },
+        teacher: { select: { fullName: true } },
+        submissions: {
+          where: { studentId: actor.studentId },
+          include: { reviewedByTeacher: { select: { fullName: true } } },
+          take: 1,
+        },
+      },
+      orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+    });
+
+    return assignments.map((assignment) => ({
+      id: assignment.id,
+      title: assignment.title,
+      code: assignment.code,
+      subjectName: assignment.subject.name,
+      batchName: assignment.batch.name,
+      teacherName: assignment.teacher?.fullName ?? null,
+      maxMarks: Number(assignment.maxMarks),
+      dueAt: assignment.dueAt,
+      status: assignment.status,
+      allowLateSubmission: assignment.allowLateSubmission,
+      submission: assignment.submissions[0] ? this.mapAssignmentSubmission(assignment.submissions[0]) : null,
+    }));
+  }
+
+  async getAssignmentDetail(assignmentId: string, actor: CurrentPortalUserContext): Promise<PortalAssignmentDetailDto> {
+    const assignment = await this.getPortalAssignmentOrThrow(assignmentId, actor);
+    return {
+      id: assignment.id,
+      title: assignment.title,
+      code: assignment.code,
+      description: assignment.description,
+      instructions: assignment.instructions,
+      subjectName: assignment.subject.name,
+      batchName: assignment.batch.name,
+      teacherName: assignment.teacher?.fullName ?? null,
+      maxMarks: Number(assignment.maxMarks),
+      dueAt: assignment.dueAt,
+      status: assignment.status,
+      allowLateSubmission: assignment.allowLateSubmission,
+      canSubmit: this.canSubmitAssignment(assignment),
+      submission: assignment.submissions[0] ? this.mapAssignmentSubmission(assignment.submissions[0]) : null,
+    };
+  }
+
+  async saveAssignmentSubmission(
+    assignmentId: string,
+    payload: UpsertPortalAssignmentSubmissionDto,
+    actor: CurrentPortalUserContext,
+  ): Promise<PortalAssignmentSubmissionDto> {
+    this.ensureStudentPortalActor(actor);
+    const assignment = await this.getPortalAssignmentOrThrow(assignmentId, actor);
+    if (!this.canSubmitAssignment(assignment)) {
+      throw new UnauthorizedException('Assignment can no longer be submitted');
+    }
+
+    const submission = await this.prisma.assignmentSubmission.upsert({
+      where: {
+        assignmentId_studentId: {
+          assignmentId: assignment.id,
+          studentId: actor.studentId,
+        },
+      },
+      update: {
+        submissionText: payload.submissionText?.trim() ? payload.submissionText.trim() : null,
+        attachmentLinks: payload.attachmentLinks ?? [],
+        status: 'DRAFT',
+        submittedAt: null,
+      },
+      create: {
+        organizationId: actor.organizationId,
+        assignmentId: assignment.id,
+        studentId: actor.studentId,
+        submissionText: payload.submissionText?.trim() ? payload.submissionText.trim() : null,
+        attachmentLinks: payload.attachmentLinks ?? [],
+        status: 'DRAFT',
+      },
+      include: {
+        reviewedByTeacher: { select: { fullName: true } },
+      },
+    });
+
+    return this.mapAssignmentSubmission(submission);
+  }
+
+  async submitAssignment(
+    assignmentId: string,
+    payload: UpsertPortalAssignmentSubmissionDto,
+    actor: CurrentPortalUserContext,
+  ): Promise<PortalAssignmentSubmissionDto> {
+    this.ensureStudentPortalActor(actor);
+    const assignment = await this.getPortalAssignmentOrThrow(assignmentId, actor);
+    if (!this.canSubmitAssignment(assignment)) {
+      throw new UnauthorizedException('Assignment can no longer be submitted');
+    }
+
+    const submission = await this.prisma.assignmentSubmission.upsert({
+      where: {
+        assignmentId_studentId: {
+          assignmentId: assignment.id,
+          studentId: actor.studentId,
+        },
+      },
+      update: {
+        submissionText: payload.submissionText?.trim() ? payload.submissionText.trim() : null,
+        attachmentLinks: payload.attachmentLinks ?? [],
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+      },
+      create: {
+        organizationId: actor.organizationId,
+        assignmentId: assignment.id,
+        studentId: actor.studentId,
+        submissionText: payload.submissionText?.trim() ? payload.submissionText.trim() : null,
+        attachmentLinks: payload.attachmentLinks ?? [],
+        status: 'SUBMITTED',
+        submittedAt: new Date(),
+      },
+      include: {
+        reviewedByTeacher: { select: { fullName: true } },
+      },
+    });
+
+    return this.mapAssignmentSubmission(submission);
   }
 
   async getAssessmentDetail(assessmentId: string, actor: CurrentPortalUserContext): Promise<PortalAssessmentDetailDto> {
@@ -694,6 +833,52 @@ export class PortalService {
     return assessment;
   }
 
+  private async getPortalAssignmentOrThrow(assignmentId: string, actor: CurrentPortalUserContext) {
+    const batchIds = await this.getStudentBatchIds(actor);
+    const assignment = await this.prisma.assignment.findFirst({
+      where: {
+        id: assignmentId,
+        organizationId: actor.organizationId,
+        batchId: { in: batchIds.length ? batchIds : ['00000000-0000-0000-0000-000000000000'] },
+        status: 'PUBLISHED',
+      },
+      include: {
+        subject: { select: { name: true } },
+        batch: { select: { name: true } },
+        teacher: { select: { fullName: true } },
+        submissions: {
+          where: { studentId: actor.studentId },
+          include: {
+            reviewedByTeacher: { select: { fullName: true } },
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    return assignment;
+  }
+
+  private canSubmitAssignment(assignment: {
+    status: 'DRAFT' | 'PUBLISHED' | 'CLOSED';
+    dueAt: Date;
+    allowLateSubmission: boolean;
+  }): boolean {
+    if (assignment.status !== 'PUBLISHED') {
+      return false;
+    }
+
+    if (assignment.allowLateSubmission) {
+      return true;
+    }
+
+    return new Date() <= assignment.dueAt;
+  }
+
   private assertAssessmentAvailable(assessment: {
     status: 'DRAFT' | 'PUBLISHED' | 'CLOSED';
     availableFrom: Date | null;
@@ -757,6 +942,30 @@ export class PortalService {
         isCorrect: answer.isCorrect,
         feedback: answer.feedback,
       })),
+    };
+  }
+
+  private mapAssignmentSubmission(submission: {
+    id: string;
+    status: string;
+    submissionText: string | null;
+    attachmentLinks: string[];
+    submittedAt: Date | null;
+    reviewedAt: Date | null;
+    feedback: string | null;
+    awardedMarks: unknown;
+    reviewedByTeacher: { fullName: string } | null;
+  }): PortalAssignmentSubmissionDto {
+    return {
+      id: submission.id,
+      status: submission.status as PortalAssignmentSubmissionDto['status'],
+      submissionText: submission.submissionText,
+      attachmentLinks: submission.attachmentLinks,
+      submittedAt: submission.submittedAt,
+      reviewedAt: submission.reviewedAt,
+      feedback: submission.feedback,
+      awardedMarks: submission.awardedMarks !== null ? Number(submission.awardedMarks) : null,
+      reviewedByTeacherName: submission.reviewedByTeacher?.fullName ?? null,
     };
   }
 }

@@ -1,8 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { ReportsService } from './reports.service';
@@ -138,6 +139,13 @@ export class ReportsController {
   @ApiOperation({ summary: 'Get academic operations summary for charts and stat cards' })
   async academicSummary(@CurrentUser() actor: CurrentUserContext) {
     return this.reportsService.getAcademicDashboardSummary(actor);
+  }
+
+  @Get('academics/unified-report-cards')
+  @Permissions('reports.read')
+  @ApiOperation({ summary: 'Get unified student report cards from exams, assessments, and assignments' })
+  async unifiedReportCards(@Query() query: PaginationQueryDto, @CurrentUser() actor: CurrentUserContext) {
+    return this.reportsService.getUnifiedReportCards(query, actor);
   }
 
   @Get('academics/grade-distribution')

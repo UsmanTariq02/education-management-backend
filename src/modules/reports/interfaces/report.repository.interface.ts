@@ -136,6 +136,33 @@ export interface ResultStatusPoint {
   total: number;
 }
 
+export interface UnifiedReportCardSubjectPoint {
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string;
+  examPercentage: number | null;
+  assessmentPercentage: number | null;
+  assignmentPercentage: number | null;
+  combinedPercentage: number | null;
+}
+
+export interface UnifiedReportCard {
+  studentId: string;
+  studentName: string;
+  batchId: string | null;
+  batchName: string;
+  batchCode: string;
+  overallPercentage: number;
+  overallGrade: string;
+  examPercentage: number | null;
+  assessmentPercentage: number | null;
+  assignmentPercentage: number | null;
+  publishedExamCount: number;
+  finalizedAssessmentCount: number;
+  reviewedAssignmentCount: number;
+  subjectBreakdown: UnifiedReportCardSubjectPoint[];
+}
+
 export interface ReportRepository {
   getDashboardSummary(organizationId?: string): Promise<{
     totalStudents: number;
@@ -162,8 +189,11 @@ export interface ReportRepository {
   getFeeCollectionOverview(organizationId?: string): Promise<FeeCollectionOverview>;
   getFeeCollectionComparison(organizationId?: string): Promise<FeeCollectionComparisonPoint[]>;
   getAcademicDashboardSummary(organizationId?: string): Promise<AcademicDashboardSummary>;
+  getUnifiedReportCards(query: PaginationQueryDto, organizationId?: string): Promise<PaginatedResult<UnifiedReportCard>>;
   getGradeDistribution(organizationId?: string): Promise<GradeDistributionPoint[]>;
   getExamScheduleTrend(limit: number, organizationId?: string): Promise<ExamSchedulePoint[]>;
   getBatchPerformance(organizationId?: string): Promise<BatchPerformancePoint[]>;
   getResultStatusSummary(organizationId?: string): Promise<ResultStatusPoint[]>;
 }
+import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';

@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { AttendanceStatus, FeeRecordStatus, StudentStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
+import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
+import { buildPagination } from '../../../common/utils/pagination.util';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   AcademicDashboardSummary,
@@ -20,6 +23,8 @@ import {
   ReminderChannelPoint,
   ReportRepository,
   ResultStatusPoint,
+  UnifiedReportCard,
+  UnifiedReportCardSubjectPoint,
   AttendanceStatusPoint,
   EnrollmentTrendPoint,
   ReminderStatusPoint,
@@ -524,6 +529,77 @@ export class ReportPrismaRepository implements ReportRepository {
     };
   }
 
+  async getUnifiedReportCards(query: PaginationQueryDto, organizationId?: string): Promise<PaginatedResult<UnifiedReportCard>> {
+    const where: Prisma.StudentWhereInput = {
+      ...(organizationId ? { organizationId } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { fullName: { contains: query.search, mode: 'insensitive' } },
+              { email: { contains: query.search, mode: 'insensitive' } },
+              { studentBatches: { some: { batch: { name: { contains: query.search, mode: 'insensitive' } } } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [students, total] = await this.prisma.$transaction([
+      this.prisma.student.findMany({
+        where,
+        include: {
+          studentBatches: {
+            include: { batch: { select: { id: true, name: true, code: true } } },
+            orderBy: { joinedAt: 'desc' },
+          },
+          examResults: {
+            where: { status: 'PUBLISHED' },
+            include: {
+              resultItems: {
+                include: {
+                  subject: { select: { id: true, name: true, code: true } },
+                  examSubject: { select: { totalMarks: true } },
+                },
+              },
+            },
+          },
+          assessmentResults: {
+            where: { status: { in: ['PROVISIONAL', 'FINALIZED'] } },
+            include: {
+              assessment: {
+                select: {
+                  id: true,
+                  subject: { select: { id: true, name: true, code: true } },
+                },
+              },
+            },
+          },
+          assignmentSubmissions: {
+            where: { status: 'REVIEWED' },
+            include: {
+              assignment: {
+                select: {
+                  id: true,
+                  subject: { select: { id: true, name: true, code: true } },
+                  maxMarks: true,
+                },
+              },
+            },
+          },
+        },
+        ...buildPagination(query),
+        orderBy: { fullName: query.sortOrder },
+      }),
+      this.prisma.student.count({ where }),
+    ]);
+
+    return {
+      items: students.map((student) => this.toUnifiedReportCard(student)),
+      total,
+      page: query.page,
+      limit: query.limit,
+    };
+  }
+
   async getGradeDistribution(organizationId?: string): Promise<GradeDistributionPoint[]> {
     const rows = await this.prisma.studentExamResult.groupBy({
       by: ['grade'],
@@ -696,5 +772,149 @@ export class ReportPrismaRepository implements ReportRepository {
         lte: period.endMonth,
       },
     };
+  }
+
+  private toUnifiedReportCard(
+    student: Prisma.StudentGetPayload<{
+      include: {
+        studentBatches: { include: { batch: { select: { id: true; name: true; code: true } } } };
+        examResults: {
+          include: {
+            resultItems: {
+              include: {
+                subject: { select: { id: true; name: true; code: true } };
+                examSubject: { select: { totalMarks: true } };
+              };
+            };
+          };
+        };
+        assessmentResults: {
+          include: {
+            assessment: { select: { id: true; subject: { select: { id: true; name: true; code: true } } } };
+          };
+        };
+        assignmentSubmissions: {
+          include: {
+            assignment: { select: { id: true; subject: { select: { id: true; name: true; code: true } }; maxMarks: true } };
+          };
+        };
+      };
+    }>,
+  ): UnifiedReportCard {
+    type SubjectAccumulator = {
+      subjectId: string;
+      subjectName: string;
+      subjectCode: string;
+      examObtained: number;
+      examTotal: number;
+      assessmentObtained: number;
+      assessmentTotal: number;
+      assignmentObtained: number;
+      assignmentTotal: number;
+    };
+
+    const subjectMap = new Map<string, SubjectAccumulator>();
+    const ensureSubject = (subject: { id: string; name: string; code: string }): SubjectAccumulator => {
+      const existing = subjectMap.get(subject.id);
+      if (existing) {
+        return existing;
+      }
+      const created: SubjectAccumulator = {
+        subjectId: subject.id,
+        subjectName: subject.name,
+        subjectCode: subject.code,
+        examObtained: 0,
+        examTotal: 0,
+        assessmentObtained: 0,
+        assessmentTotal: 0,
+        assignmentObtained: 0,
+        assignmentTotal: 0,
+      };
+      subjectMap.set(subject.id, created);
+      return created;
+    };
+
+    for (const result of student.examResults) {
+      for (const item of result.resultItems) {
+        const accumulator = ensureSubject(item.subject);
+        accumulator.examObtained += Number(item.obtainedMarks);
+        accumulator.examTotal += Number(item.examSubject.totalMarks);
+      }
+    }
+
+    for (const result of student.assessmentResults) {
+      const accumulator = ensureSubject(result.assessment.subject);
+      accumulator.assessmentObtained += Number(result.obtainedMarks);
+      accumulator.assessmentTotal += Number(result.totalMarks);
+    }
+
+    for (const submission of student.assignmentSubmissions) {
+      const accumulator = ensureSubject(submission.assignment.subject);
+      accumulator.assignmentObtained += Number(submission.awardedMarks ?? 0);
+      accumulator.assignmentTotal += Number(submission.assignment.maxMarks);
+    }
+
+    const subjectBreakdown: UnifiedReportCardSubjectPoint[] = Array.from(subjectMap.values()).map((subject) => {
+      const examPercentage = subject.examTotal > 0 ? Number(((subject.examObtained / subject.examTotal) * 100).toFixed(2)) : null;
+      const assessmentPercentage =
+        subject.assessmentTotal > 0 ? Number(((subject.assessmentObtained / subject.assessmentTotal) * 100).toFixed(2)) : null;
+      const assignmentPercentage =
+        subject.assignmentTotal > 0 ? Number(((subject.assignmentObtained / subject.assignmentTotal) * 100).toFixed(2)) : null;
+      const totalObtained = subject.examObtained + subject.assessmentObtained + subject.assignmentObtained;
+      const totalPossible = subject.examTotal + subject.assessmentTotal + subject.assignmentTotal;
+
+      return {
+        subjectId: subject.subjectId,
+        subjectName: subject.subjectName,
+        subjectCode: subject.subjectCode,
+        examPercentage,
+        assessmentPercentage,
+        assignmentPercentage,
+        combinedPercentage: totalPossible > 0 ? Number(((totalObtained / totalPossible) * 100).toFixed(2)) : null,
+      };
+    });
+
+    const examObtained = subjectBreakdown.reduce((sum, item) => sum + (item.examPercentage ?? 0), 0);
+    const examCount = subjectBreakdown.filter((item) => item.examPercentage !== null).length;
+    const assessmentObtained = subjectBreakdown.reduce((sum, item) => sum + (item.assessmentPercentage ?? 0), 0);
+    const assessmentCount = subjectBreakdown.filter((item) => item.assessmentPercentage !== null).length;
+    const assignmentObtained = subjectBreakdown.reduce((sum, item) => sum + (item.assignmentPercentage ?? 0), 0);
+    const assignmentCount = subjectBreakdown.filter((item) => item.assignmentPercentage !== null).length;
+
+    const allComponentPercentages = [
+      ...subjectBreakdown.map((item) => item.examPercentage).filter((value): value is number => value !== null),
+      ...subjectBreakdown.map((item) => item.assessmentPercentage).filter((value): value is number => value !== null),
+      ...subjectBreakdown.map((item) => item.assignmentPercentage).filter((value): value is number => value !== null),
+    ];
+    const overallPercentage = allComponentPercentages.length
+      ? Number((allComponentPercentages.reduce((sum, value) => sum + value, 0) / allComponentPercentages.length).toFixed(2))
+      : 0;
+    const currentBatch = student.studentBatches[0]?.batch ?? null;
+
+    return {
+      studentId: student.id,
+      studentName: student.fullName,
+      batchId: currentBatch?.id ?? null,
+      batchName: currentBatch?.name ?? 'Unassigned',
+      batchCode: currentBatch?.code ?? 'UNASSIGNED',
+      overallPercentage,
+      overallGrade: this.toLetterGrade(overallPercentage),
+      examPercentage: examCount ? Number((examObtained / examCount).toFixed(2)) : null,
+      assessmentPercentage: assessmentCount ? Number((assessmentObtained / assessmentCount).toFixed(2)) : null,
+      assignmentPercentage: assignmentCount ? Number((assignmentObtained / assignmentCount).toFixed(2)) : null,
+      publishedExamCount: student.examResults.length,
+      finalizedAssessmentCount: student.assessmentResults.length,
+      reviewedAssignmentCount: student.assignmentSubmissions.length,
+      subjectBreakdown,
+    };
+  }
+
+  private toLetterGrade(percentage: number): string {
+    if (percentage >= 85) return 'A';
+    if (percentage >= 75) return 'B+';
+    if (percentage >= 65) return 'B';
+    if (percentage >= 55) return 'C+';
+    if (percentage >= 45) return 'C';
+    return 'D';
   }
 }

@@ -11,7 +11,9 @@ import {
   PortalAssessmentAttemptDto,
   SavePortalAssessmentAttemptDto,
 } from './dto/portal-assessments.dto';
+import { PortalAssignmentDetailDto, PortalAssignmentListItemDto, PortalAssignmentSubmissionDto } from './dto/portal-assignments.dto';
 import { PortalDashboardDto } from './dto/portal-dashboard.dto';
+import { UpsertPortalAssignmentSubmissionDto } from '../assignments/dto/create-assignment.dto';
 import { PortalService } from './portal.service';
 
 @ApiTags('Portal')
@@ -32,6 +34,41 @@ export class PortalController {
   @ApiOperation({ summary: 'List portal assessments for the authenticated student or parent account' })
   async getAssessments(@CurrentPortalUser() actor: CurrentPortalUserContext): Promise<PortalAssessmentListItemDto[]> {
     return this.portalService.getAssessments(actor);
+  }
+
+  @Get('assignments')
+  @ApiOperation({ summary: 'List portal assignments for the authenticated student or parent account' })
+  async getAssignments(@CurrentPortalUser() actor: CurrentPortalUserContext): Promise<PortalAssignmentListItemDto[]> {
+    return this.portalService.getAssignments(actor);
+  }
+
+  @Get('assignments/:assignmentId')
+  @ApiOperation({ summary: 'Get a portal assignment detail view' })
+  async getAssignmentDetail(
+    @Param('assignmentId') assignmentId: string,
+    @CurrentPortalUser() actor: CurrentPortalUserContext,
+  ): Promise<PortalAssignmentDetailDto> {
+    return this.portalService.getAssignmentDetail(assignmentId, actor);
+  }
+
+  @Put('assignments/:assignmentId/submission')
+  @ApiOperation({ summary: 'Save a portal assignment draft submission' })
+  async saveAssignmentSubmission(
+    @Param('assignmentId') assignmentId: string,
+    @Body() payload: UpsertPortalAssignmentSubmissionDto,
+    @CurrentPortalUser() actor: CurrentPortalUserContext,
+  ): Promise<PortalAssignmentSubmissionDto> {
+    return this.portalService.saveAssignmentSubmission(assignmentId, payload, actor);
+  }
+
+  @Post('assignments/:assignmentId/submit')
+  @ApiOperation({ summary: 'Submit a portal assignment' })
+  async submitAssignment(
+    @Param('assignmentId') assignmentId: string,
+    @Body() payload: UpsertPortalAssignmentSubmissionDto,
+    @CurrentPortalUser() actor: CurrentPortalUserContext,
+  ): Promise<PortalAssignmentSubmissionDto> {
+    return this.portalService.submitAssignment(assignmentId, payload, actor);
   }
 
   @Get('assessments/:assessmentId')
