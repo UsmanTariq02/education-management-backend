@@ -4,7 +4,7 @@ import { createReadStream } from 'fs';
 import { mkdir, writeFile } from 'fs/promises';
 import { extname, join } from 'path';
 import { Readable } from 'stream';
-import { AttendanceStatus } from '@prisma/client';
+import { AttendanceStatus, StudentBatchStatus } from '@prisma/client';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentPortalUserContext } from '../../common/interfaces/current-portal-user.interface';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -439,7 +439,158 @@ export class PortalService {
         },
       }),
     ]);
+    const currentStudentAggregate = this.buildPortalAcademicAggregate(examResults, assessmentResults, assignmentSubmissions);
+    const subjectBreakdown = currentStudentAggregate.subjectBreakdown;
+    const examAverage = currentStudentAggregate.examAverage;
+    const assessmentAverage = currentStudentAggregate.assessmentAverage;
+    const assignmentAverage = currentStudentAggregate.assignmentAverage;
+    const overallPercentage = currentStudentAggregate.overallPercentage;
+    const currentBatch = student.studentBatches[0]?.batch ?? {
+      id: 'unassigned',
+      name: 'Unassigned batch',
+      code: 'N/A',
+    };
+    const batchStudentIds = currentBatch.id === 'unassigned'
+      ? [student.id]
+      : (
+          await this.prisma.studentBatch.findMany({
+            where: {
+              batchId: currentBatch.id,
+              status: {
+                in: [StudentBatchStatus.ACTIVE, StudentBatchStatus.COMPLETED],
+              },
+            },
+            select: {
+              studentId: true,
+            },
+          })
+        ).map((item) => item.studentId);
 
+    const [batchExamResults, batchAssessmentResults, batchAssignmentSubmissions] = batchStudentIds.length
+      ? await Promise.all([
+          this.prisma.studentExamResult.findMany({
+            where: {
+              organizationId: actor.organizationId,
+              studentId: { in: batchStudentIds },
+              status: 'PUBLISHED',
+            },
+            include: {
+              resultItems: {
+                include: {
+                  subject: { select: { id: true, name: true, code: true } },
+                  examSubject: { select: { totalMarks: true } },
+                },
+              },
+            },
+          }),
+          this.prisma.assessmentResult.findMany({
+            where: {
+              organizationId: actor.organizationId,
+              studentId: { in: batchStudentIds },
+              status: {
+                in: ['PROVISIONAL', 'FINALIZED'],
+              },
+            },
+            include: {
+              assessment: {
+                select: {
+                  subject: { select: { id: true, name: true, code: true } },
+                },
+              },
+            },
+          }),
+          this.prisma.assignmentSubmission.findMany({
+            where: {
+              organizationId: actor.organizationId,
+              studentId: { in: batchStudentIds },
+              status: 'REVIEWED',
+            },
+            include: {
+              assignment: {
+                select: {
+                  subject: { select: { id: true, name: true, code: true } },
+                  maxMarks: true,
+                },
+              },
+            },
+          }),
+        ])
+      : [[], [], []];
+
+    const rankingMap = new Map<string, { overallPercentage: number }>();
+    for (const studentId of batchStudentIds) {
+      rankingMap.set(studentId, { overallPercentage: 0 });
+    }
+
+    for (const studentId of batchStudentIds) {
+      const aggregate = this.buildPortalAcademicAggregate(
+        batchExamResults.filter((item) => item.studentId === studentId),
+        batchAssessmentResults.filter((item) => item.studentId === studentId),
+        batchAssignmentSubmissions.filter((item) => item.studentId === studentId),
+      );
+      rankingMap.set(studentId, { overallPercentage: aggregate.overallPercentage });
+    }
+
+    const rankedStudents = Array.from(rankingMap.entries())
+      .map(([studentId, aggregate]) => ({ studentId, overallPercentage: aggregate.overallPercentage }))
+      .sort((left, right) => right.overallPercentage - left.overallPercentage);
+    const classRank = rankedStudents.findIndex((item) => item.studentId === student.id) + 1 || null;
+    const focusAreas = subjectBreakdown
+      .filter((item) => item.combinedPercentage !== null)
+      .sort((left, right) => (left.combinedPercentage ?? 0) - (right.combinedPercentage ?? 0))
+      .slice(0, 3)
+      .map((item) => ({
+        subjectId: item.subjectId,
+        subjectName: item.subjectName,
+        subjectCode: item.subjectCode,
+        combinedPercentage: item.combinedPercentage,
+        message:
+          (item.combinedPercentage ?? 0) >= 75
+            ? 'Keep this subject steady and push it into distinction range.'
+            : 'This subject needs more revision, assignment follow-up, and assessment practice.',
+      }));
+
+    return {
+      studentId: student.id,
+      studentName: student.fullName,
+      batchName: currentBatch.name,
+      batchCode: currentBatch.code,
+      classRank,
+      classSize: batchStudentIds.length || 1,
+      overallPercentage,
+      overallGrade: this.toLetterGrade(overallPercentage),
+      examPercentage: examAverage,
+      assessmentPercentage: assessmentAverage,
+      assignmentPercentage: assignmentAverage,
+      publishedExamCount: examResults.length,
+      finalizedAssessmentCount: assessmentResults.filter((item) => item.status === 'FINALIZED').length,
+      reviewedAssignmentCount: assignmentSubmissions.length,
+      focusAreas,
+      subjectBreakdown,
+    };
+  }
+
+  private buildPortalAcademicAggregate(
+    examResults: Array<{
+      resultItems: Array<{
+        obtainedMarks: unknown;
+        subject: { id: string; name: string; code: string };
+        examSubject: { totalMarks: unknown };
+      }>;
+    }>,
+    assessmentResults: Array<{
+      obtainedMarks: unknown;
+      totalMarks: unknown;
+      assessment: { subject: { id: string; name: string; code: string } };
+    }>,
+    assignmentSubmissions: Array<{
+      awardedMarks: unknown;
+      assignment: {
+        maxMarks: unknown;
+        subject: { id: string; name: string; code: string };
+      };
+    }>,
+  ) {
     type SubjectAggregate = {
       subjectId: string;
       subjectName: string;
@@ -535,27 +686,13 @@ export class PortalService {
       subjectBreakdown.map((item) => item.assignmentPercentage).filter((value): value is number => value !== null),
     );
     const overallValues = subjectBreakdown.map((item) => item.combinedPercentage).filter((value): value is number => value !== null);
-    const overallPercentage = average(overallValues) ?? 0;
-    const currentBatch = student.studentBatches[0]?.batch ?? {
-      id: 'unassigned',
-      name: 'Unassigned batch',
-      code: 'N/A',
-    };
 
     return {
-      studentId: student.id,
-      studentName: student.fullName,
-      batchName: currentBatch.name,
-      batchCode: currentBatch.code,
-      overallPercentage,
-      overallGrade: this.toLetterGrade(overallPercentage),
-      examPercentage: examAverage,
-      assessmentPercentage: assessmentAverage,
-      assignmentPercentage: assignmentAverage,
-      publishedExamCount: examResults.length,
-      finalizedAssessmentCount: assessmentResults.filter((item) => item.status === 'FINALIZED').length,
-      reviewedAssignmentCount: assignmentSubmissions.length,
       subjectBreakdown,
+      examAverage,
+      assessmentAverage,
+      assignmentAverage,
+      overallPercentage: average(overallValues) ?? 0,
     };
   }
 

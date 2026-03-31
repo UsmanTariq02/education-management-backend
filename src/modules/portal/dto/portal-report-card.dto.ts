@@ -3,6 +3,8 @@ export interface PortalReportCardDto {
   studentName: string;
   batchName: string;
   batchCode: string;
+  classRank: number | null;
+  classSize: number;
   overallPercentage: number;
   overallGrade: string;
   examPercentage: number | null;
@@ -11,6 +13,13 @@ export interface PortalReportCardDto {
   publishedExamCount: number;
   finalizedAssessmentCount: number;
   reviewedAssignmentCount: number;
+  focusAreas: Array<{
+    subjectId: string;
+    subjectName: string;
+    subjectCode: string;
+    combinedPercentage: number | null;
+    message: string;
+  }>;
   subjectBreakdown: Array<{
     subjectId: string;
     subjectName: string;
