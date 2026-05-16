@@ -70,6 +70,8 @@ export interface AssessmentRepository {
   findById(id: string): Promise<AssessmentView | null>;
   update(id: string, payload: UpdateAssessmentDto, organizationId?: string): Promise<AssessmentView>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
+  updateManyStatus(ids: string[], status: AssessmentStatus, organizationId?: string): Promise<number>;
   findReviewQueue(assessmentId: string, organizationId?: string): Promise<AssessmentReviewQueueView | null>;
   reviewAttempt(
     attemptId: string,

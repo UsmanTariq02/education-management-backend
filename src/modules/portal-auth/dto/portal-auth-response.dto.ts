@@ -15,6 +15,12 @@ export class PortalAuthUserDto {
   organizationName!: string;
 
   @ApiProperty()
+  hasOpenAiApiKey!: boolean;
+
+  @ApiProperty()
+  hasTrialAiAccess!: boolean;
+
+  @ApiProperty()
   email!: string;
 
   @ApiProperty({ enum: PortalAccountType })

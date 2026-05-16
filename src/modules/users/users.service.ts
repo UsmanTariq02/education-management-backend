@@ -124,6 +124,71 @@ export class UsersService {
     });
   }
 
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const scopedOrganizationId = this.resolveScopedOrganizationId(actor);
+    const uniqueIds = Array.from(new Set(ids));
+    const users = await Promise.all(uniqueIds.map((id) => this.userRepository.findByIdWithAuthorization(id)));
+    const resolvedUsers = users.filter((user): user is NonNullable<typeof user> => Boolean(user));
+
+    if (resolvedUsers.length !== uniqueIds.length) {
+      throw new NotFoundException('One or more users were not found');
+    }
+
+    for (const user of resolvedUsers) {
+      if (!actor.roles.includes('SUPER_ADMIN') && user.organizationId !== scopedOrganizationId) {
+        throw new NotFoundException('User not found');
+      }
+      this.assertManageableTarget(user, actor);
+    }
+
+    const deletedCount = await this.userRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : scopedOrganizationId,
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'users',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async bulkUpdateStatus(
+    ids: string[],
+    isActive: boolean,
+    actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    const scopedOrganizationId = this.resolveScopedOrganizationId(actor);
+    const uniqueIds = Array.from(new Set(ids));
+    const users = await Promise.all(uniqueIds.map((id) => this.userRepository.findByIdWithAuthorization(id)));
+    const resolvedUsers = users.filter((user): user is NonNullable<typeof user> => Boolean(user));
+
+    if (resolvedUsers.length !== uniqueIds.length) {
+      throw new NotFoundException('One or more users were not found');
+    }
+
+    for (const user of resolvedUsers) {
+      if (!actor.roles.includes('SUPER_ADMIN') && user.organizationId !== scopedOrganizationId) {
+        throw new NotFoundException('User not found');
+      }
+      this.assertManageableTarget(user, actor);
+    }
+
+    const updatedCount = await this.userRepository.updateManyStatus(
+      uniqueIds,
+      isActive,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : scopedOrganizationId,
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'users',
+      action: 'bulk-status',
+      metadata: { ids: uniqueIds, isActive, updatedCount },
+    });
+    return { updatedCount };
+  }
+
   private toResponse(user: UserWithAuthorization): UserResponseDto {
     return {
       id: user.id,

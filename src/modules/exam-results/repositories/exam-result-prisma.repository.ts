@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, StudentExamResultStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -164,6 +164,22 @@ export class ExamResultPrismaRepository implements ExamResultRepository {
       await this.prisma.studentExamResult.findFirstOrThrow({ where: { id, organizationId }, select: { id: true } });
     }
     await this.prisma.studentExamResult.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.StudentExamResultWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.studentExamResult.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more exam results were not found');
+      }
+      await tx.studentExamResultItem.deleteMany({ where: { resultId: { in: ids } } });
+      const result = await tx.studentExamResult.deleteMany({ where });
+      return result.count;
+    });
   }
 
   private toView(item: Prisma.StudentExamResultGetPayload<{ include: typeof resultInclude }>): ExamResultView {

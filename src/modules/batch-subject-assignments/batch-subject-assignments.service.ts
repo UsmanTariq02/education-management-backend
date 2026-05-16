@@ -87,4 +87,39 @@ export class BatchSubjectAssignmentsService {
       metadata: { deleted: true },
     });
   }
+
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.assignmentRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'batch-subject-assignments',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async bulkUpdateStatus(
+    ids: string[],
+    isActive: boolean,
+    actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const updatedCount = await this.assignmentRepository.updateManyStatus(
+      uniqueIds,
+      isActive,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'batch-subject-assignments',
+      action: 'bulk-status',
+      metadata: { ids: uniqueIds, isActive, updatedCount },
+    });
+    return { updatedCount };
+  }
 }

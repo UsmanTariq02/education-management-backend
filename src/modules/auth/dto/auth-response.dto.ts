@@ -15,10 +15,22 @@ export class AuthUserDto {
   organizationName!: string | null;
 
   @ApiProperty({ nullable: true })
+  subscriptionStatus!: string | null;
+
+  @ApiProperty({ nullable: true })
+  trialEndsAt!: string | null;
+
+  @ApiProperty({ nullable: true })
   userLimit!: number | null;
 
   @ApiProperty({ nullable: true })
   studentLimit!: number | null;
+
+  @ApiProperty()
+  hasOpenAiApiKey!: boolean;
+
+  @ApiProperty()
+  hasTrialAiAccess!: boolean;
 
   @ApiProperty({ enum: OrganizationModule, isArray: true })
   enabledModules!: OrganizationModule[];

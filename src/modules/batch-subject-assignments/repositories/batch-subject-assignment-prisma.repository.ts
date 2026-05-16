@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -94,6 +94,39 @@ export class BatchSubjectAssignmentPrismaRepository implements BatchSubjectAssig
       });
     }
     await this.prisma.batchSubjectAssignment.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.BatchSubjectAssignmentWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.batchSubjectAssignment.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more batch subject assignments were not found');
+      }
+      const result = await tx.batchSubjectAssignment.deleteMany({ where });
+      return result.count;
+    });
+  }
+
+  async updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.BatchSubjectAssignmentWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.batchSubjectAssignment.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more batch subject assignments were not found');
+      }
+      const result = await tx.batchSubjectAssignment.updateMany({
+        where,
+        data: { isActive },
+      });
+      return result.count;
+    });
   }
 
   private toView(

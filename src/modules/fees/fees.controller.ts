@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import { BulkDeleteDto } from '../../common/dto/bulk-delete.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
@@ -63,5 +64,19 @@ export class FeesController {
   async deleteRecord(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext): Promise<{ deleted: boolean }> {
     await this.feesService.deleteRecord(id, actor);
     return { deleted: true };
+  }
+
+  @Post('records/bulk-delete')
+  @Permissions('fees.delete')
+  @ApiOperation({ summary: 'Delete fee records in bulk' })
+  async bulkDeleteRecords(@Body() payload: BulkDeleteDto, @CurrentUser() actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    return this.feesService.bulkDeleteRecords(payload.ids, actor);
+  }
+
+  @Post('automation/process-escalations')
+  @Permissions('fees.update')
+  @ApiOperation({ summary: 'Run fee escalation automation immediately' })
+  async processEscalations(@CurrentUser() actor: CurrentUserContext) {
+    return this.feesService.processFeeEscalations(actor);
   }
 }

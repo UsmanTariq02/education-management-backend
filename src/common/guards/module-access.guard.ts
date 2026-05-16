@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { MODULE_ACCESS_KEY } from '../decorators/module-access.decorator';
 import { CurrentUserContext } from '../interfaces/current-user.interface';
@@ -24,6 +24,17 @@ export class ModuleAccessGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<{ user: CurrentUserContext }>();
     await this.organizationAccessService.assertActorCanAccessModule(request.user, requiredModule);
+
+    if (request.user.roles.includes('SUPER_ADMIN')) {
+      return true;
+    }
+
+    if (!request.user.organizationId) {
+      throw new ForbiddenException('Organization scope is required');
+    }
+
+    const organization = await this.organizationAccessService.getOrganizationConfiguration(request.user.organizationId);
+    request.user.enabledModules = organization.enabledModules;
     return true;
   }
 }

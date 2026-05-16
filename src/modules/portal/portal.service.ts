@@ -1288,6 +1288,31 @@ export class PortalService {
   async getAnnouncements(actor: CurrentPortalUserContext): Promise<PortalAnnouncementDto[]> {
     await this.getPortalAccountOrThrow(actor);
 
+    const account = await this.prisma.portalAccount.findFirst({
+      where: {
+        organizationId: actor.organizationId,
+        studentId: actor.studentId,
+        type: actor.accountType,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+
+    const acknowledgements = account
+      ? await this.prisma.portalAcknowledgement.findMany({
+          where: {
+            portalAccountId: account.id,
+            itemKind: 'ANNOUNCEMENT',
+          },
+          select: {
+            itemKey: true,
+            acknowledgedAt: true,
+          },
+        })
+      : [];
+
+    const acknowledgedMap = new Map<string, Date>(acknowledgements.map((item) => [item.itemKey, item.acknowledgedAt]));
+
     const announcements = await this.prisma.announcement.findMany({
       where: {
         organizationId: actor.organizationId,
@@ -1314,6 +1339,7 @@ export class PortalService {
       isPinned: item.isPinned,
       publishedAt: item.publishedAt,
       expiresAt: item.expiresAt,
+      acknowledgedAt: acknowledgedMap.get(item.id) ?? null,
     }));
   }
 
@@ -2104,7 +2130,7 @@ export class PortalService {
   }
 
   private toAcknowledgementKind(kind: string): PortalAcknowledgementItemDto['kind'] {
-    if (kind === 'FEE_DUE' || kind === 'ASSIGNMENT_FEEDBACK' || kind === 'ASSESSMENT_RESULT' || kind === 'EXAM_RESULT') {
+    if (kind === 'FEE_DUE' || kind === 'ASSIGNMENT_FEEDBACK' || kind === 'ASSESSMENT_RESULT' || kind === 'EXAM_RESULT' || kind === 'ANNOUNCEMENT') {
       return kind;
     }
     return 'FEE_DUE';

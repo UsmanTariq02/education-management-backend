@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -84,6 +84,21 @@ export class TimetablePrismaRepository implements TimetableRepository {
       });
     }
     await this.prisma.timetableEntry.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.TimetableEntryWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.timetableEntry.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more timetable entries were not found');
+      }
+      const result = await tx.timetableEntry.deleteMany({ where });
+      return result.count;
+    });
   }
 
   private toView(item: Prisma.TimetableEntryGetPayload<{ include: typeof timetableInclude }>): TimetableEntryView {

@@ -31,6 +31,7 @@ export interface ReminderRepository {
   findMany(query: PaginationQueryDto, organizationId?: string): Promise<PaginatedResult<ReminderLog>>;
   update(id: string, payload: UpdateReminderDto, organizationId?: string): Promise<ReminderLog>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
   getDeliveryContext(studentId: string, organizationId?: string): Promise<ReminderDeliveryContext | null>;
   listTemplates(query: PaginationQueryDto, organizationId: string): Promise<PaginatedResult<ReminderTemplate>>;
   createTemplate(payload: CreateReminderTemplateDto, organizationId: string): Promise<ReminderTemplate>;

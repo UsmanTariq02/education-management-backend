@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, User } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -19,6 +19,7 @@ const authorizationInclude = {
       userLimit: true,
       studentLimit: true,
       enabledModules: true,
+      openAiApiKeyEncrypted: true,
     },
   },
   userRoles: {
@@ -163,6 +164,39 @@ export class UserPrismaRepository implements UserRepository {
 
     await this.prisma.user.delete({
       where: { id },
+    });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.UserWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.user.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more users were not found');
+      }
+      const result = await tx.user.deleteMany({ where });
+      return result.count;
+    });
+  }
+
+  async updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.UserWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.user.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more users were not found');
+      }
+      const result = await tx.user.updateMany({
+        where,
+        data: { isActive },
+      });
+      return result.count;
     });
   }
 

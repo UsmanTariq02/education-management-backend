@@ -1,11 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PortalAccountType, StudentStatus } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { AppConfiguration } from '../../config/configuration';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { AuditLogService } from '../../common/services/audit-log.service';
+import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { PasswordUtil } from '../../common/utils/password.util';
+import { isTrialAiAccessible } from '../../common/utils/ai-access.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PortalAuthResponseDto, PortalAuthUserDto } from './dto/portal-auth-response.dto';
 import { PortalLoginDto } from './dto/portal-login.dto';
@@ -30,16 +32,7 @@ export class PortalAuthService {
     await this.assertPortalAuthenticationAllowed(account);
 
     const user = this.toUser(account);
-    const tokens = await this.generateTokenPair(user);
-
-    await this.prisma.portalAccount.update({
-      where: { id: account.id },
-      data: {
-        lastLoginAt: new Date(),
-        refreshTokenHash: await PasswordUtil.hash(tokens.refreshToken),
-        refreshTokenExpiresAt: this.resolveRefreshTokenExpiry(),
-      },
-    });
+    const response = await this.createSession(account, user);
 
     await this.auditLogService.log({
       module: 'portal-auth',
@@ -48,7 +41,49 @@ export class PortalAuthService {
       metadata: { accountType: payload.accountType, email: user.email },
     });
 
-    return { ...tokens, user };
+    return response;
+  }
+
+  async impersonateStudent(studentId: string, actor: CurrentUserContext): Promise<PortalAuthResponseDto> {
+    return this.impersonateStudentPortal(studentId, actor, PortalAccountType.STUDENT);
+  }
+
+  async impersonateParent(studentId: string, actor: CurrentUserContext): Promise<PortalAuthResponseDto> {
+    return this.impersonateStudentPortal(studentId, actor, PortalAccountType.PARENT);
+  }
+
+  private async impersonateStudentPortal(
+    studentId: string,
+    actor: CurrentUserContext,
+    accountType: PortalAccountType,
+  ): Promise<PortalAuthResponseDto> {
+    if (!actor.roles.includes('SUPER_ADMIN')) {
+      throw new ForbiddenException('Only super admins can open a student portal session');
+    }
+
+    const account = await this.findAccountByStudentId(studentId, accountType);
+    if (!account) {
+      throw new NotFoundException(`${accountType === PortalAccountType.STUDENT ? 'Student' : 'Parent'} portal account not found`);
+    }
+
+    await this.assertPortalAuthenticationAllowed(account);
+
+    const user = this.toUser(account);
+    const response = await this.createSession(account, user);
+
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'portal-auth',
+      action: 'impersonate-login',
+      targetId: account.studentId,
+      metadata: {
+        accountType: account.type,
+        email: user.email,
+        initiatedBy: actor.email,
+      },
+    });
+
+    return response;
   }
 
   async refreshTokens(payload: PortalRefreshTokenDto): Promise<PortalAuthResponseDto> {
@@ -73,17 +108,7 @@ export class PortalAuthService {
     }
 
     const user = this.toUser(account);
-    const tokens = await this.generateTokenPair(user);
-
-    await this.prisma.portalAccount.update({
-      where: { id: account.id },
-      data: {
-        refreshTokenHash: await PasswordUtil.hash(tokens.refreshToken),
-        refreshTokenExpiresAt: this.resolveRefreshTokenExpiry(),
-      },
-    });
-
-    return { ...tokens, user };
+    return this.createSession(account, user);
   }
 
   async me(accountId: string): Promise<PortalAuthUserDto> {
@@ -137,6 +162,24 @@ export class PortalAuthService {
     return { accessToken, refreshToken };
   }
 
+  private async createSession(
+    account: NonNullable<Awaited<ReturnType<PortalAuthService['findAccountById']>>>,
+    user: PortalAuthenticatedUser,
+  ): Promise<PortalAuthResponseDto> {
+    const tokens = await this.generateTokenPair(user);
+
+    await this.prisma.portalAccount.update({
+      where: { id: account.id },
+      data: {
+        lastLoginAt: new Date(),
+        refreshTokenHash: await PasswordUtil.hash(tokens.refreshToken),
+        refreshTokenExpiresAt: this.resolveRefreshTokenExpiry(),
+      },
+    });
+
+    return { ...tokens, user };
+  }
+
   private resolveRefreshTokenExpiry(): Date {
     const expiresIn = this.configService.get('auth.refreshExpiresIn', { infer: true });
     const match = expiresIn.match(/^(\d+)([dhm])$/);
@@ -161,6 +204,27 @@ export class PortalAuthService {
     return this.prisma.portalAccount.findFirst({
       where: {
         email: email.trim().toLowerCase(),
+        type,
+      },
+      include: {
+        organization: true,
+        student: {
+          include: {
+            studentBatches: {
+              include: {
+                batch: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  private async findAccountByStudentId(studentId: string, type: PortalAccountType) {
+    return this.prisma.portalAccount.findFirst({
+      where: {
+        studentId,
         type,
       },
       include: {
@@ -205,7 +269,7 @@ export class PortalAuthService {
       throw new UnauthorizedException('Organization is inactive');
     }
 
-    if (['SUSPENDED', 'CANCELLED'].includes(account.organization.subscriptionStatus)) {
+    if (['PAST_DUE', 'SUSPENDED', 'CANCELLED'].includes(account.organization.subscriptionStatus)) {
       throw new UnauthorizedException('Organization subscription is not active');
     }
 
@@ -228,6 +292,8 @@ export class PortalAuthService {
       studentId: account.studentId,
       organizationId: account.organizationId,
       organizationName: account.organization.name,
+      hasOpenAiApiKey: Boolean((account.organization as { openAiApiKeyEncrypted?: string | null }).openAiApiKeyEncrypted),
+      hasTrialAiAccess: isTrialAiAccessible(account.organization.subscriptionStatus, account.organization.trialEndsAt),
       email: account.email,
       accountType: account.type,
       studentName: account.student.fullName,

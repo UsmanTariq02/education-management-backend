@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, StudentStatus } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
 import { buildPagination } from '../../../common/utils/pagination.util';
@@ -155,9 +155,46 @@ export class StudentPrismaRepository implements StudentRepository {
     return this.toView(student);
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.student.delete({
-      where: { id },
+  async delete(id: string, organizationId?: string): Promise<void> {
+    if (organizationId) {
+      await this.prisma.student.findFirstOrThrow({
+        where: { id, organizationId },
+        select: { id: true },
+      });
+    }
+    await this.prisma.student.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.StudentWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.student.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more students were not found');
+      }
+      const result = await tx.student.deleteMany({ where });
+      return result.count;
+    });
+  }
+
+  async updateManyStatus(ids: string[], status: StudentStatus, organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.StudentWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.student.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more students were not found');
+      }
+      const result = await tx.student.updateMany({
+        where,
+        data: { status },
+      });
+      return result.count;
     });
   }
 

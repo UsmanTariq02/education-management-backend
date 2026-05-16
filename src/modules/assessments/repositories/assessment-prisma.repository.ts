@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '.prisma/client';
+import { AssessmentStatus, Prisma } from '.prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
 import { buildPagination } from '../../../common/utils/pagination.util';
@@ -250,6 +250,40 @@ export class AssessmentPrismaRepository implements AssessmentRepository {
     }
 
     await this.prisma.assessment.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.AssessmentWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.assessment.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more assessments were not found');
+      }
+      await tx.assessmentQuestion.deleteMany({ where: { assessmentId: { in: ids } } });
+      const result = await tx.assessment.deleteMany({ where });
+      return result.count;
+    });
+  }
+
+  async updateManyStatus(ids: string[], status: AssessmentStatus, organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.AssessmentWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.assessment.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more assessments were not found');
+      }
+      const result = await tx.assessment.updateMany({
+        where,
+        data: { status },
+      });
+      return result.count;
+    });
   }
 
   async findReviewQueue(assessmentId: string, organizationId?: string): Promise<AssessmentReviewQueueView | null> {

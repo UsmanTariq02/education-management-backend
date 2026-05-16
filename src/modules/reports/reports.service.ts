@@ -2,13 +2,26 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { REPORT_REPOSITORY } from '../../common/constants/injection-tokens';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
+import { AuditLogService } from '../../common/services/audit-log.service';
 import { ReportRepository } from './interfaces/report.repository.interface';
+
+export interface WeeklyPrincipalSummary {
+  organizationId: string | null;
+  organizationName: string;
+  generatedAt: string;
+  headline: string;
+  overview: string;
+  highlights: string[];
+  risks: string[];
+  nextActions: string[];
+}
 
 @Injectable()
 export class ReportsService {
   constructor(
     @Inject(REPORT_REPOSITORY)
     private readonly reportRepository: ReportRepository,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async getDashboardSummary(actor: CurrentUserContext) {
@@ -130,6 +143,95 @@ export class ReportsService {
 
   async getResultStatusSummary(actor: CurrentUserContext) {
     return this.reportRepository.getResultStatusSummary(this.resolveOrganizationId(actor));
+  }
+
+  async getWeeklyPrincipalSummary(actor: CurrentUserContext): Promise<WeeklyPrincipalSummary> {
+    const organizationId = this.resolveOrganizationId(actor);
+    const summary = await this.generateWeeklyPrincipalSummary(organizationId, actor.organizationName ?? 'Current organization');
+
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'reports',
+      action: 'weekly-principal-summary',
+      metadata: {
+        organizationId: summary.organizationId,
+        organizationName: summary.organizationName,
+        headline: summary.headline,
+      },
+    });
+
+    return summary;
+  }
+
+  async generateWeeklyPrincipalSummary(organizationId?: string, organizationName?: string): Promise<WeeklyPrincipalSummary> {
+    const [dashboardSummary, feeOverview, attendanceDailyTrend, reminderStatusSummary, academicSummary, enrollmentTrend] =
+      await Promise.all([
+        this.reportRepository.getDashboardSummary(organizationId),
+        this.reportRepository.getFeeCollectionOverview(organizationId),
+        this.reportRepository.getAttendanceDailyTrend(7, organizationId),
+        this.reportRepository.getReminderStatusBreakdown(organizationId),
+        this.reportRepository.getAcademicDashboardSummary(organizationId),
+        this.reportRepository.getEnrollmentTrend(3, organizationId),
+      ]);
+
+    const recentAttendance = attendanceDailyTrend.slice(-7);
+    const attendanceAbsent = recentAttendance.reduce((sum, item) => sum + item.absent, 0);
+    const attendanceLate = recentAttendance.reduce((sum, item) => sum + item.late, 0);
+    const reminderFailed = reminderStatusSummary.find((item) => item.status === 'FAILED')?.total ?? 0;
+    const reminderSent = reminderStatusSummary.find((item) => item.status === 'SENT')?.total ?? 0;
+    const overdueBalance = feeOverview.currentMonth.overdue;
+    const pendingBalance = feeOverview.currentMonth.pending;
+    const enrollmentDelta =
+      enrollmentTrend.length >= 2 ? enrollmentTrend[enrollmentTrend.length - 1].count - enrollmentTrend[0].count : 0;
+
+    const headline =
+      overdueBalance > pendingBalance
+        ? 'Fee recovery needs immediate attention'
+        : attendanceAbsent + attendanceLate > 0
+          ? 'Attendance follow-up requires staff attention'
+          : 'Operations are stable and ready for the next cycle';
+
+    const overview = [
+      `${dashboardSummary.totalStudents} students tracked with ${dashboardSummary.activeStudents} active learners in scope.`,
+      `${dashboardSummary.unpaidFeeCount} fee records remain unpaid and current month overdue exposure is ${overdueBalance.toFixed(2)}.`,
+      `${attendanceAbsent} absent marks and ${attendanceLate} late marks were recorded in the recent attendance window.`,
+      `${reminderSent} reminders were sent and ${reminderFailed} reminder deliveries failed in the latest summary.`,
+      academicSummary.totalResults > 0
+        ? `Academic average stands at ${academicSummary.averagePercentage.toFixed(1)}% across published results.`
+        : 'No published academic results are available yet for this summary.',
+    ].join(' ');
+
+    const highlights = [
+      `Monthly fee collection: ${dashboardSummary.monthlyFeeCollection.toFixed(2)}`,
+      `Recent enrollment change: ${enrollmentDelta >= 0 ? '+' : ''}${enrollmentDelta} students over the last few months`,
+      `Reminder volume: ${reminderSent} sent, ${reminderFailed} failed`,
+    ];
+
+    const risks = [
+      overdueBalance > 0
+        ? `${overdueBalance.toFixed(2)} remains overdue and should be escalated.`
+        : 'No overdue fee balance is visible in the current month.',
+      attendanceAbsent + attendanceLate > 0
+        ? `${attendanceAbsent + attendanceLate} attendance exceptions need follow-up.`
+        : 'Attendance looks clean in the recent window.',
+    ];
+
+    const nextActions = [
+      overdueBalance > 0 ? 'Run fee follow-up and escalation workflows for overdue records.' : 'Keep watching fee records for new pending balances.',
+      attendanceAbsent + attendanceLate > 0 ? 'Review chronic attendance exceptions and contact guardians.' : 'Maintain attendance monitoring and only intervene on new exceptions.',
+      reminderFailed > 0 ? 'Inspect failed reminders and delivery settings.' : 'Use the reminder queue to keep communications moving.',
+    ];
+
+    return {
+      organizationId: organizationId ?? null,
+      organizationName: organizationName ?? 'Platform scope',
+      generatedAt: new Date().toISOString(),
+      headline,
+      overview,
+      highlights,
+      risks,
+      nextActions,
+    };
   }
 
   private resolveOrganizationId(actor: CurrentUserContext): string | undefined {

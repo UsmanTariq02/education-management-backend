@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleAccess } from '../../common/decorators/module-access.decorator';
@@ -216,5 +216,12 @@ export class ReportsController {
   @ApiOperation({ summary: 'Get reminder daily trend for charts' })
   async reminderDailyTrend(@CurrentUser() actor: CurrentUserContext) {
     return this.reportsService.getReminderDailyTrend(actor);
+  }
+
+  @Post('automation/weekly-principal-summary')
+  @Permissions('reports.read')
+  @ApiOperation({ summary: 'Generate a weekly principal summary immediately' })
+  async weeklyPrincipalSummary(@CurrentUser() actor: CurrentUserContext) {
+    return this.reportsService.getWeeklyPrincipalSummary(actor);
   }
 }

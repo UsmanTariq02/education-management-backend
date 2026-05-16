@@ -15,6 +15,7 @@ export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
   @Get()
+  @Roles('SUPER_ADMIN')
   @Permissions('users.read')
   @ApiOperation({ summary: 'List roles with permissions' })
   async findAll() {
@@ -22,6 +23,7 @@ export class RolesController {
   }
 
   @Get(':id')
+  @Roles('SUPER_ADMIN')
   @Permissions('users.read')
   @ApiOperation({ summary: 'Get role details' })
   async findOne(@Param('id') id: string) {

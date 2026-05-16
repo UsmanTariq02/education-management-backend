@@ -21,4 +21,6 @@ export interface SubjectRepository {
   findById(id: string): Promise<SubjectView | null>;
   update(id: string, payload: UpdateSubjectDto, organizationId?: string): Promise<SubjectView>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
+  updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number>;
 }

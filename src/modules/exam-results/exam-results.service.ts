@@ -70,4 +70,19 @@ export class ExamResultsService {
       metadata: { deleted: true },
     });
   }
+
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.examResultRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'exam-results',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
 }

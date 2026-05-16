@@ -22,9 +22,12 @@ model Organization {
   subscriptionStartsAt           DateTime?
   subscriptionEndsAt             DateTime?
   subscriptionNotes              String?                         @db.Text
+  aiDraftApprovalRequired        Boolean                         @default(false)
   userLimit                      Int                             @default(10)
   studentLimit                   Int                             @default(500)
-  enabledModules                 OrganizationModule[]            @default([USERS, STUDENTS, PORTALS, BATCHES, ACADEMICS, FEES, ATTENDANCE, REMINDERS, REPORTS, ACTIVITY_LOGS, SETTINGS, MEDIA])
+  openAiApiKeyEncrypted          String?                         @db.Text
+  openAiApiKeyUpdatedAt          DateTime?
+  enabledModules                 OrganizationModule[]            @default([USERS, STUDENTS, PORTALS, BATCHES, ACADEMICS, FEES, ATTENDANCE, REMINDERS, MAIL, REPORTS, ACTIVITY_LOGS, SETTINGS, MEDIA])
   createdAt                      DateTime                        @default(now())
   updatedAt                      DateTime                        @updatedAt
   users                          User[]
@@ -50,6 +53,7 @@ model Organization {
   studentDocuments               StudentDocument[]
   organizationAssets             OrganizationAsset[]
   announcements                  Announcement[]
+  aiReviewQueueItems             AiReviewQueueItem[]
   feePlans                       FeePlan[]
   feeRecords                     FeeRecord[]
   feePaymentProofs               FeePaymentProof[]
@@ -59,6 +63,8 @@ model Organization {
   reminderRules                  ReminderRule[]
   reminderSchedules              ReminderSchedule[]
   reminderProviderSetting        ReminderProviderSetting?
+  mailConversations              MailConversation[]
+  mailMessages                   MailMessage[]
   auditLogs                      AuditLog[]
   loginEvents                    UserLoginEvent[]
   onlineClassSessions            OnlineClassSession[]
@@ -77,6 +83,7 @@ enum OrganizationModule {
   FEES
   ATTENDANCE
   REMINDERS
+  MAIL
   REPORTS
   ACTIVITY_LOGS
   SETTINGS
@@ -137,6 +144,17 @@ enum ReminderRecipientTarget {
   STUDENT
   GUARDIAN
   BOTH
+}
+
+enum MailMessageStatus {
+  DRAFT
+  SENT
+}
+
+enum MailRecipientType {
+  TO
+  CC
+  BCC
 }
 
 enum ReminderScheduleStatus {
@@ -355,6 +373,7 @@ model User {
   sentReminders              ReminderLog[]
   actorAuditLogs             AuditLog[]
   loginEvents                UserLoginEvent[]
+  aiReviewQueueItems         AiReviewQueueItem[]
   onlineClassAutomationRuns  OnlineClassAutomationRun[]
   studentDocumentsUploaded   StudentDocument[]
   organizationAssetsUploaded OrganizationAsset[]
@@ -547,6 +566,26 @@ model Announcement {
 
   @@index([organizationId, audience, isPublished])
   @@index([organizationId, publishedAt])
+}
+
+model AiReviewQueueItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String   @db.Uuid
+  kind           String   @db.VarChar(50)
+  title          String   @db.VarChar(180)
+  summary        String   @db.VarChar(500)
+  body           String   @db.Text
+  status         String   @db.VarChar(20)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  archivedAt     DateTime?
+  approvedAt     DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, status])
+  @@index([organizationId, kind])
 }
 
 model Batch {
@@ -1272,6 +1311,65 @@ model ReminderTemplate {
 
   @@unique([organizationId, code, channel])
   @@index([organizationId, isActive])
+}
+
+model MailConversation {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  subject        String        @db.VarChar(255)
+  createdByEmail String        @db.VarChar(255)
+  lastMessageAt  DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages       MailMessage[]
+
+  @@index([organizationId, lastMessageAt])
+  @@index([organizationId, createdAt])
+}
+
+model MailMessage {
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String            @db.Uuid
+  conversationId   String            @db.Uuid
+  senderEmail      String            @db.VarChar(255)
+  senderName       String            @db.VarChar(201)
+  subject          String            @db.VarChar(255)
+  body             String            @db.Text
+  status           MailMessageStatus @default(DRAFT)
+  sentAt           DateTime?
+  senderReadAt     DateTime?
+  senderStarredAt  DateTime?
+  senderArchivedAt DateTime?
+  senderTrashedAt  DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation     MailConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  recipients       MailRecipient[]
+
+  @@index([organizationId, senderEmail, status, createdAt])
+  @@index([organizationId, conversationId, createdAt])
+  @@index([status, sentAt])
+}
+
+model MailRecipient {
+  id             String            @id @default(uuid()) @db.Uuid
+  mailMessageId   String            @db.Uuid
+  email           String            @db.VarChar(255)
+  name            String?           @db.VarChar(201)
+  recipientType   MailRecipientType @default(TO)
+  readAt          DateTime?
+  starredAt       DateTime?
+  archivedAt      DateTime?
+  trashedAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  mailMessage     MailMessage       @relation(fields: [mailMessageId], references: [id], onDelete: Cascade)
+
+  @@index([email, createdAt])
+  @@index([mailMessageId, email])
+  @@index([email, readAt])
 }
 
 model ReminderRule {

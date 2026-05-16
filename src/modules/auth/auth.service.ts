@@ -8,6 +8,7 @@ import { AppConfiguration } from '../../config/configuration';
 import { USER_REPOSITORY } from '../../common/constants/injection-tokens';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { PasswordUtil } from '../../common/utils/password.util';
+import { isTrialAiAccessible } from '../../common/utils/ai-access.util';
 import { AuditLogService } from '../../common/services/audit-log.service';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
@@ -306,6 +307,7 @@ export class AuthService {
         userLimit: number;
         studentLimit: number;
         enabledModules: string[];
+        openAiApiKeyEncrypted: string | null;
       } | null;
       userRoles: Array<{ role: { name: string; rolePermissions: Array<{ permission: { name: string } }> } }>;
     },
@@ -324,8 +326,12 @@ export class AuthService {
       email: user.email,
       organizationId: user.organizationId,
       organizationName: user.organization?.name ?? null,
+      subscriptionStatus: user.organization?.subscriptionStatus ?? null,
+      trialEndsAt: user.organization?.trialEndsAt ? user.organization.trialEndsAt.toISOString() : null,
       userLimit: user.organization?.userLimit ?? null,
       studentLimit: user.organization?.studentLimit ?? null,
+      hasOpenAiApiKey: Boolean(user.organization?.openAiApiKeyEncrypted),
+      hasTrialAiAccess: isTrialAiAccessible(user.organization?.subscriptionStatus, user.organization?.trialEndsAt),
       enabledModules: (user.organization?.enabledModules as OrganizationModule[] | undefined) ?? [],
       firstName: user.firstName,
       lastName: user.lastName,
@@ -407,7 +413,7 @@ export class AuthService {
     }
 
     if (user.organizationId && user.organization) {
-      if (['SUSPENDED', 'CANCELLED'].includes(user.organization.subscriptionStatus)) {
+      if (['PAST_DUE', 'SUSPENDED', 'CANCELLED'].includes(user.organization.subscriptionStatus)) {
         await this.userRepository.createLoginEvent({
           userId: user.id,
           organizationId: user.organization.id,

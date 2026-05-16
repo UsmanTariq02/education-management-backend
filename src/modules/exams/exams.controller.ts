@@ -3,6 +3,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import { BulkDeleteDto } from '../../common/dto/bulk-delete.dto';
+import { BulkPublishDto } from '../../common/dto/bulk-publish.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
@@ -51,5 +53,22 @@ export class ExamsController {
   async delete(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext): Promise<{ deleted: boolean }> {
     await this.examsService.delete(id, actor);
     return { deleted: true };
+  }
+
+  @Post('bulk-delete')
+  @Permissions('exams.delete')
+  @ApiOperation({ summary: 'Delete exams in bulk' })
+  async bulkDelete(@Body() payload: BulkDeleteDto, @CurrentUser() actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    return this.examsService.bulkDelete(payload.ids, actor);
+  }
+
+  @Post('bulk-publish')
+  @Permissions('exams.update')
+  @ApiOperation({ summary: 'Publish or unpublish exams in bulk' })
+  async bulkPublish(
+    @Body() payload: BulkPublishDto,
+    @CurrentUser() actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    return this.examsService.bulkPublish(payload.ids, payload.isPublished, actor);
   }
 }

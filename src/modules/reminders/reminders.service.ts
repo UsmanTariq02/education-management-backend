@@ -103,6 +103,21 @@ export class RemindersService {
     });
   }
 
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.reminderRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : this.resolveOrganizationId(actor),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'reminders',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
   async listTemplates(query: PaginationQueryDto, actor: CurrentUserContext) {
     return this.reminderRepository.listTemplates(query, this.resolveOrganizationId(actor));
   }

@@ -89,4 +89,19 @@ export class TimetablesService {
       metadata: { deleted: true },
     });
   }
+
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.timetableRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'timetables',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
 }

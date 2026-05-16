@@ -85,6 +85,7 @@ export interface AssignmentRepository {
   findById(id: string): Promise<AssignmentView | null>;
   update(id: string, payload: UpdateAssignmentDto, organizationId?: string): Promise<AssignmentView>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
   reviewSubmission(
     submissionId: string,
     payload: { feedback?: string; awardedMarks?: number; finalize: boolean },

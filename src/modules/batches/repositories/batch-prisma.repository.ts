@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -77,8 +77,47 @@ export class BatchPrismaRepository implements BatchRepository {
     return this.toView(batch);
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, organizationId?: string): Promise<void> {
+    if (organizationId) {
+      await this.prisma.batch.findFirstOrThrow({
+        where: { id, organizationId },
+        select: { id: true },
+      });
+    }
     await this.prisma.batch.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.BatchWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.batch.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more batches were not found');
+      }
+      const result = await tx.batch.deleteMany({ where });
+      return result.count;
+    });
+  }
+
+  async updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.BatchWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.batch.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more batches were not found');
+      }
+      const result = await tx.batch.updateMany({
+        where,
+        data: { isActive },
+      });
+      return result.count;
+    });
   }
 
   private toView(batch: Prisma.BatchGetPayload<{ include: typeof batchInclude }>): BatchView {

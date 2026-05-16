@@ -127,6 +127,16 @@ export class AssignmentPrismaRepository implements AssignmentRepository {
     await this.prisma.assignment.delete({ where: { id } });
   }
 
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    const where: Prisma.AssignmentWhereInput = {
+      id: { in: ids },
+      ...(organizationId ? { organizationId } : {}),
+    };
+
+    const result = await this.prisma.assignment.deleteMany({ where });
+    return result.count;
+  }
+
   async reviewSubmission(
     submissionId: string,
     payload: { feedback?: string; awardedMarks?: number; finalize: boolean },

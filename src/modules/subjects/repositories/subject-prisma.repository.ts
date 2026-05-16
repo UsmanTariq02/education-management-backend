@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -83,6 +83,39 @@ export class SubjectPrismaRepository implements SubjectRepository {
       });
     }
     await this.prisma.subject.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.SubjectWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.subject.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more subjects were not found');
+      }
+      const result = await tx.subject.deleteMany({ where });
+      return result.count;
+    });
+  }
+
+  async updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.SubjectWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.subject.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more subjects were not found');
+      }
+      const result = await tx.subject.updateMany({
+        where,
+        data: { isActive },
+      });
+      return result.count;
+    });
   }
 
   private toView(subject: Prisma.SubjectGetPayload<{ include: typeof subjectInclude }>): SubjectView {

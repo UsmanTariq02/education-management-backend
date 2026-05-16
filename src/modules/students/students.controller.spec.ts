@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { Response } from 'express';
-import { StudentStatus } from '@prisma/client';
+import { PortalAccountType, StudentStatus } from '@prisma/client';
 import { SortDirection } from '../../common/enums/sort-direction.enum';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { StudentsController } from './students.controller';
@@ -22,6 +22,8 @@ describe('StudentsController', () => {
             importCsv: jest.fn(),
             findAll: jest.fn(),
             findOne: jest.fn(),
+            openStudentPortal: jest.fn(),
+            openParentPortal: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
           },
@@ -123,6 +125,7 @@ describe('StudentsController', () => {
       permissions: ['students.create'],
     };
     const file = {
+      originalname: 'students.csv',
       buffer: Buffer.from("firstName,lastName,phone,guardianName,guardianPhone,admissionDate\nAli,Khan,03001234567,Ahmed,03007654321,2026-03-01"),
     } as Express.Multer.File;
     const expected = {
@@ -174,6 +177,80 @@ describe('StudentsController', () => {
 
     await expect(controller.findOne('student-1', actor)).resolves.toEqual(expected);
     expect(service.findOne).toHaveBeenCalledWith('student-1', actor);
+  });
+
+  it('openStudentPortal should delegate to service', async () => {
+    const actor = {
+      userId: '1',
+      email: 'superadmin@edu.local',
+      organizationId: null,
+      organizationName: null,
+      userLimit: null,
+      studentLimit: null,
+      enabledModules: [],
+      roles: ['SUPER_ADMIN'],
+      permissions: ['portal-access.manage'],
+    };
+    const expected = {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: {
+        accountId: 'portal-account-1',
+        studentId: 'student-1',
+        organizationId: 'org-1',
+        organizationName: 'Default Academy',
+        email: 'student@edu.local',
+        accountType: PortalAccountType.STUDENT,
+        studentName: 'Ali Khan',
+        guardianName: 'Ahmed Khan',
+        batches: ['Grade 5'],
+        studentStatus: StudentStatus.ACTIVE,
+        hasOpenAiApiKey: false,
+        hasTrialAiAccess: true,
+      },
+    };
+
+    service.openStudentPortal.mockResolvedValue(expected);
+
+    await expect(controller.openStudentPortal('student-1', actor)).resolves.toEqual(expected);
+    expect(service.openStudentPortal).toHaveBeenCalledWith('student-1', actor);
+  });
+
+  it('openParentPortal should delegate to service', async () => {
+    const actor = {
+      userId: '1',
+      email: 'superadmin@edu.local',
+      organizationId: null,
+      organizationName: null,
+      userLimit: null,
+      studentLimit: null,
+      enabledModules: [],
+      roles: ['SUPER_ADMIN'],
+      permissions: ['portal-access.manage'],
+    };
+    const expected = {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      user: {
+        accountId: 'portal-account-1',
+        studentId: 'student-1',
+        organizationId: 'org-1',
+        organizationName: 'Default Academy',
+        email: 'parent@edu.local',
+        accountType: PortalAccountType.PARENT,
+        studentName: 'Ali Khan',
+        guardianName: 'Ahmed Khan',
+        batches: ['Grade 5'],
+        studentStatus: StudentStatus.ACTIVE,
+        hasOpenAiApiKey: false,
+        hasTrialAiAccess: true,
+      },
+    };
+
+    service.openParentPortal.mockResolvedValue(expected);
+
+    await expect(controller.openParentPortal('student-1', actor)).resolves.toEqual(expected);
+    expect(service.openParentPortal).toHaveBeenCalledWith('student-1', actor);
   });
 
   it('update should delegate to service', async () => {

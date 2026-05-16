@@ -33,6 +33,6 @@ import { WhatsAppReminderProvider } from './providers/whatsapp-reminder.provider
       useClass: ReminderPrismaRepository,
     },
   ],
-  exports: [REMINDER_REPOSITORY, ReminderAutomationService],
+  exports: [REMINDER_REPOSITORY, ReminderAutomationService, RemindersService],
 })
 export class RemindersModule {}

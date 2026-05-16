@@ -3,6 +3,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import { BulkDeleteDto } from '../../common/dto/bulk-delete.dto';
+import { BulkUpdateStatusDto } from '../../common/dto/bulk-update-status.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
@@ -55,5 +57,22 @@ export class AcademicSessionsController {
   async delete(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext): Promise<{ deleted: boolean }> {
     await this.academicSessionsService.delete(id, actor);
     return { deleted: true };
+  }
+
+  @Post('bulk-delete')
+  @Permissions('academic-sessions.delete')
+  @ApiOperation({ summary: 'Delete academic sessions in bulk' })
+  async bulkDelete(@Body() payload: BulkDeleteDto, @CurrentUser() actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    return this.academicSessionsService.bulkDelete(payload.ids, actor);
+  }
+
+  @Post('bulk-status')
+  @Permissions('academic-sessions.update')
+  @ApiOperation({ summary: 'Update academic sessions in bulk' })
+  async bulkStatus(
+    @Body() payload: BulkUpdateStatusDto,
+    @CurrentUser() actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    return this.academicSessionsService.bulkUpdateStatus(payload.ids, payload.isActive, actor);
   }
 }

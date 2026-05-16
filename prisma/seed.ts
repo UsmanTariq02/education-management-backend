@@ -83,6 +83,11 @@ const permissions = [
   'attendance.read',
   'attendance.update',
   'attendance.delete',
+  'mail.create',
+  'mail.read',
+  'mail.update',
+  'mail.delete',
+  'ai.use',
   'reminders.create',
   'reminders.read',
   'reminders.update',
@@ -2068,7 +2073,19 @@ async function main(): Promise<void> {
 
   const staffPermissionNames = permissionRecords
     .filter((permission) =>
-      ['students.read', 'batches.read', 'fees.read', 'attendance.create', 'attendance.read', 'reminders.read', 'student-documents.read'].includes(
+      [
+        'students.read',
+        'batches.read',
+        'fees.read',
+        'attendance.create',
+        'attendance.read',
+        'reminders.read',
+        'mail.read',
+        'mail.create',
+        'mail.update',
+        'ai.use',
+        'student-documents.read',
+      ].includes(
         permission.name,
       ) ||
       ['academic-sessions.read', 'subjects.read', 'teachers.read', 'organization-assets.read'].includes(
@@ -2098,6 +2115,10 @@ async function main(): Promise<void> {
         'teachers.create',
         'teachers.read',
         'teachers.update',
+        'mail.read',
+        'mail.create',
+        'mail.update',
+        'ai.use',
         'batch-subject-assignments.create',
         'batch-subject-assignments.read',
         'batch-subject-assignments.update',
@@ -2140,6 +2161,10 @@ async function main(): Promise<void> {
         'academic-sessions.read',
         'subjects.read',
         'teachers.read',
+        'mail.read',
+        'mail.create',
+        'mail.update',
+        'ai.use',
         'batch-subject-assignments.read',
         'timetables.read',
         'online-classes.read',

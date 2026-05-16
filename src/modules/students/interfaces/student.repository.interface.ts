@@ -30,7 +30,9 @@ export interface StudentRepository {
   findMany(query: PaginationQueryDto, organizationId?: string): Promise<PaginatedResult<StudentView>>;
   findById(id: string, organizationId?: string): Promise<StudentView | null>;
   update(id: string, payload: UpdateStudentDto, organizationId?: string): Promise<StudentView>;
-  delete(id: string): Promise<void>;
+  delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
+  updateManyStatus(ids: string[], status: string, organizationId?: string): Promise<number>;
   findExistingIdentifiers(emails: string[], phones: string[], organizationId: string): Promise<{
     emails: Set<string>;
     phones: Set<string>;

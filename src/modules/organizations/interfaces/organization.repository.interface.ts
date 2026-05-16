@@ -4,7 +4,7 @@ import { PaginatedResult } from '../../../common/interfaces/paginated-result.int
 import { CreateOrganizationDto } from '../dto/create-organization.dto';
 import { UpdateOrganizationDto } from '../dto/update-organization.dto';
 
-export type OrganizationSummary = Organization & {
+export type OrganizationSummary = Omit<Organization, 'openAiApiKeyEncrypted'> & {
   totalUsers: number;
   totalAdmins: number;
   totalStaff: number;
@@ -14,6 +14,8 @@ export type OrganizationSummary = Organization & {
   totalFeeRecords: number;
   totalAttendanceRecords: number;
   totalReminderLogs: number;
+  hasOpenAiApiKey: boolean;
+  hasTrialAiAccess: boolean;
 };
 
 export interface OrganizationRepository {

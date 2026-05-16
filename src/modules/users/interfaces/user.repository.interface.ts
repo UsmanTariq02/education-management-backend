@@ -14,6 +14,7 @@ export type UserWithAuthorization = User & {
     userLimit: number;
     studentLimit: number;
     enabledModules: string[];
+    openAiApiKeyEncrypted: string | null;
   } | null;
   userRoles: Array<{
     role: {
@@ -32,6 +33,8 @@ export interface UserRepository {
   create(payload: CreateUserDto, passwordHash: string, organizationId: string | null): Promise<UserWithAuthorization>;
   update(id: string, payload: UpdateUserDto, organizationId?: string): Promise<UserWithAuthorization>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
+  updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number>;
   storeRefreshToken(
     sessionId: string,
     userId: string,

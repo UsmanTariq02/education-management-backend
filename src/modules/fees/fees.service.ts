@@ -6,6 +6,7 @@ import { AuditLogService } from '../../common/services/audit-log.service';
 import { CreateFeePlanDto } from './dto/create-fee-plan.dto';
 import { CreateFeeRecordDto } from './dto/create-fee-record.dto';
 import { UpdateFeeRecordDto } from './dto/update-fee-record.dto';
+import { FeeEscalationAutomationService, FeeEscalationAutomationSummary } from './fee-escalation-automation.service';
 import { FeeRepository } from './interfaces/fee.repository.interface';
 import { ReminderAutomationService } from '../reminders/reminder-automation.service';
 
@@ -15,6 +16,7 @@ export class FeesService {
     @Inject(FEE_REPOSITORY)
     private readonly feeRepository: FeeRepository,
     private readonly reminderAutomationService: ReminderAutomationService,
+    private readonly feeEscalationAutomationService: FeeEscalationAutomationService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -97,6 +99,26 @@ export class FeesService {
       targetId: id,
       metadata: { deleted: true },
     });
+  }
+
+  async bulkDeleteRecords(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.feeRepository.deleteManyRecords(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : this.resolveOrganizationId(actor),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'fees',
+      action: 'bulk-delete-records',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async processFeeEscalations(actor: CurrentUserContext): Promise<FeeEscalationAutomationSummary> {
+    const organizationId = actor.roles.includes('SUPER_ADMIN') && !actor.organizationId ? undefined : this.resolveOrganizationId(actor);
+    return this.feeEscalationAutomationService.processEscalations(organizationId, actor.userId);
   }
 
   private resolveOrganizationId(actor: CurrentUserContext): string {

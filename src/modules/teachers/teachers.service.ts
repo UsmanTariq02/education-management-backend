@@ -169,6 +169,41 @@ export class TeachersService {
     });
   }
 
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.teacherRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'teachers',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async bulkUpdateStatus(
+    ids: string[],
+    isActive: boolean,
+    actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const updatedCount = await this.teacherRepository.updateManyStatus(
+      uniqueIds,
+      isActive,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'teachers',
+      action: 'bulk-status',
+      metadata: { ids: uniqueIds, isActive, updatedCount },
+    });
+    return { updatedCount };
+  }
+
   private toView(teacher: Prisma.TeacherGetPayload<{ include: typeof teacherWithOrganization }>): TeacherView {
     return {
       id: teacher.id,

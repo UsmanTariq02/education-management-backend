@@ -27,6 +27,19 @@ export interface AppConfiguration {
     smtpFromName: string;
     whatsappCallmebotApiKey: string;
   };
+  ai: {
+    openaiApiKey: string;
+    openaiModel: string;
+    groqApiKey: string;
+    groqModel: string;
+    groqTrialRequestLimit: number;
+  };
+  features: {
+    onlineClassesEnabled: boolean;
+  };
+  security: {
+    organizationSecretKey: string;
+  };
   googleWorkspace: {
     clientEmail: string;
     privateKey: string;
@@ -64,6 +77,19 @@ export default (): AppConfiguration => ({
     smtpFromEmail: process.env.SMTP_FROM_EMAIL ?? '',
     smtpFromName: process.env.SMTP_FROM_NAME ?? 'EduFlow',
     whatsappCallmebotApiKey: process.env.WHATSAPP_CALLMEBOT_API_KEY ?? '',
+  },
+  ai: {
+    openaiApiKey: process.env.OPENAI_API_KEY ?? '',
+    openaiModel: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+    groqApiKey: process.env.GROQ_API_KEY ?? '',
+    groqModel: process.env.GROQ_MODEL ?? 'llama-3.1-8b-instant',
+    groqTrialRequestLimit: Number(process.env.GROQ_TRIAL_REQUEST_LIMIT ?? 5),
+  },
+  features: {
+    onlineClassesEnabled: process.env.ONLINE_CLASSES_ENABLED === 'true',
+  },
+  security: {
+    organizationSecretKey: process.env.ORGANIZATION_SECRET_KEY ?? '',
   },
   googleWorkspace: {
     clientEmail: process.env.GOOGLE_WORKSPACE_CLIENT_EMAIL ?? '',

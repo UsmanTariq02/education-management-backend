@@ -4,6 +4,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { BulkDeleteDto } from '../../common/dto/bulk-delete.dto';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
@@ -54,6 +55,13 @@ export class RemindersController {
   async delete(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext): Promise<{ deleted: boolean }> {
     await this.remindersService.delete(id, actor);
     return { deleted: true };
+  }
+
+  @Post('bulk-delete')
+  @Permissions('reminders.delete')
+  @ApiOperation({ summary: 'Delete reminder logs in bulk' })
+  async bulkDelete(@Body() payload: BulkDeleteDto, @CurrentUser() actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    return this.remindersService.bulkDelete(payload.ids, actor);
   }
 
   @Get('templates')

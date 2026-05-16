@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { FEE_REPOSITORY } from '../../common/constants/injection-tokens';
 import { RemindersModule } from '../reminders/reminders.module';
+import { FeeEscalationAutomationService } from './fee-escalation-automation.service';
 import { FeesController } from './fees.controller';
 import { FeesService } from './fees.service';
 import { FeePrismaRepository } from './repositories/fee-prisma.repository';
@@ -10,6 +11,7 @@ import { FeePrismaRepository } from './repositories/fee-prisma.repository';
   controllers: [FeesController],
   providers: [
     FeesService,
+    FeeEscalationAutomationService,
     {
       provide: FEE_REPOSITORY,
       useClass: FeePrismaRepository,

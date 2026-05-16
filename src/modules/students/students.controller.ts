@@ -20,9 +20,13 @@ import { Response } from 'express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { BulkDeleteDto } from '../../common/dto/bulk-delete.dto';
+import { BulkUpdateStatusDto } from '../../common/dto/bulk-update-status.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
+import { PortalAuthResponseDto } from '../portal-auth/dto/portal-auth-response.dto';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpsertPortalAccessDto } from './dto/upsert-portal-access.dto';
@@ -111,6 +115,20 @@ export class StudentsController {
     return this.studentsService.getPortalAccess(id, actor);
   }
 
+  @Post(':id/portal-login')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Open the student portal as the selected student' })
+  async openStudentPortal(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext): Promise<PortalAuthResponseDto> {
+    return this.studentsService.openStudentPortal(id, actor);
+  }
+
+  @Post(':id/parent-portal-login')
+  @Roles('SUPER_ADMIN')
+  @ApiOperation({ summary: 'Open the parent portal for the selected student' })
+  async openParentPortal(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext): Promise<PortalAuthResponseDto> {
+    return this.studentsService.openParentPortal(id, actor);
+  }
+
   @Post(':id/portal-access')
   @Permissions('portal-access.manage')
   @ApiOperation({ summary: 'Create or update student and parent portal access' })
@@ -139,5 +157,23 @@ export class StudentsController {
   async delete(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext): Promise<{ deleted: boolean }> {
     await this.studentsService.delete(id, actor);
     return { deleted: true };
+  }
+
+  @Post('bulk-delete')
+  @Permissions('students.delete')
+  @ApiOperation({ summary: 'Delete students in bulk' })
+  async bulkDelete(@Body() payload: BulkDeleteDto, @CurrentUser() actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    return this.studentsService.bulkDelete(payload.ids, actor);
+  }
+
+  @Post('bulk-status')
+  @Permissions('students.update')
+  @ApiOperation({ summary: 'Update student status in bulk' })
+  async bulkStatus(
+    @Body() payload: BulkUpdateStatusDto,
+    @CurrentUser() actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    const status = payload.isActive ? 'ACTIVE' : 'INACTIVE';
+    return this.studentsService.bulkUpdateStatus(payload.ids, status, actor);
   }
 }

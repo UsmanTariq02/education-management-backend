@@ -7,4 +7,5 @@ export interface PortalAnnouncementDto {
   isPinned: boolean;
   publishedAt: Date | null;
   expiresAt: Date | null;
+  acknowledgedAt: Date | null;
 }

@@ -6,7 +6,10 @@ import { UpdateAttendanceDto } from '../dto/update-attendance.dto';
 
 export interface AttendanceRepository {
   create(payload: CreateAttendanceDto, organizationId: string): Promise<Attendance>;
+  createMany(payloads: CreateAttendanceDto[], organizationId: string): Promise<Attendance[]>;
   findMany(query: PaginationQueryDto, organizationId?: string): Promise<PaginatedResult<Attendance>>;
   update(id: string, payload: UpdateAttendanceDto, organizationId?: string): Promise<Attendance>;
+  updateManyStatus(ids: string[], status: Attendance['status'], organizationId?: string): Promise<number>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
 }

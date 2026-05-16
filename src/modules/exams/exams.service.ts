@@ -70,4 +70,35 @@ export class ExamsService {
       metadata: { deleted: true },
     });
   }
+
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.examRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'exams',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async bulkPublish(ids: string[], isPublished: boolean, actor: CurrentUserContext): Promise<{ updatedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const updatedCount = await this.examRepository.updateManyPublished(
+      uniqueIds,
+      isPublished,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'exams',
+      action: 'bulk-publish',
+      metadata: { ids: uniqueIds, isPublished, updatedCount },
+    });
+    return { updatedCount };
+  }
 }

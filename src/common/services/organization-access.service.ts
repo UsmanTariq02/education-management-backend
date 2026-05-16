@@ -92,9 +92,10 @@ export class OrganizationAccessService {
       throw new ForbiddenException('Organization scope is required');
     }
 
-    await this.assertOrganizationAccessible(actor.organizationId);
+    const organization = await this.getOrganizationConfiguration(actor.organizationId);
+    this.assertOrganizationAccessibleConfiguration(organization);
 
-    if (!(actor.enabledModules ?? []).includes(module)) {
+    if (!organization.enabledModules.includes(module)) {
       throw new ForbiddenException(`${module} module is not enabled for this organization`);
     }
   }
@@ -108,7 +109,7 @@ export class OrganizationAccessService {
       throw new ForbiddenException('Organization is inactive');
     }
 
-    if (['SUSPENDED', 'CANCELLED'].includes(organization.subscriptionStatus)) {
+    if (['PAST_DUE', 'SUSPENDED', 'CANCELLED'].includes(organization.subscriptionStatus)) {
       throw new ForbiddenException('Organization subscription is not active');
     }
 

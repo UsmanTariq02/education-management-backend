@@ -30,4 +30,6 @@ export interface BatchSubjectAssignmentRepository {
   findById(id: string): Promise<BatchSubjectAssignmentView | null>;
   update(id: string, payload: UpdateBatchSubjectAssignmentDto, organizationId?: string): Promise<BatchSubjectAssignmentView>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
+  updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number>;
 }

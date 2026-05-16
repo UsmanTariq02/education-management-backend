@@ -6,6 +6,7 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
 import { CreateOrganizationBillingEntryDto } from './dto/create-organization-billing-entry.dto';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateOrganizationBillingEntryDto } from './dto/update-organization-billing-entry.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsService } from './organizations.service';
 
@@ -58,5 +59,16 @@ export class OrganizationsController {
     @CurrentUser() actor: CurrentUserContext,
   ) {
     return this.organizationsService.createBillingEntry(id, payload, actor);
+  }
+
+  @Patch(':id/billing-entries/:entryId')
+  @ApiOperation({ summary: 'Update organization billing ledger entry' })
+  async updateBillingEntry(
+    @Param('id') id: string,
+    @Param('entryId') entryId: string,
+    @Body() payload: UpdateOrganizationBillingEntryDto,
+    @CurrentUser() actor: CurrentUserContext,
+  ) {
+    return this.organizationsService.updateBillingEntry(id, entryId, payload, actor);
   }
 }

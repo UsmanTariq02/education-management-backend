@@ -12,4 +12,5 @@ export interface FeeRepository {
   listRecords(query: PaginationQueryDto, organizationId?: string): Promise<PaginatedResult<FeeRecord>>;
   updateRecord(id: string, payload: UpdateFeeRecordDto, organizationId?: string): Promise<FeeRecord>;
   deleteRecord(id: string, organizationId?: string): Promise<void>;
+  deleteManyRecords(ids: string[], organizationId?: string): Promise<number>;
 }

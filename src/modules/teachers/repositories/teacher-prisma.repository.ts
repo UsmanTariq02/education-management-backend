@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -109,6 +109,39 @@ export class TeacherPrismaRepository implements TeacherRepository {
       });
     }
     await this.prisma.teacher.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.TeacherWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.teacher.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more teachers were not found');
+      }
+      const result = await tx.teacher.deleteMany({ where });
+      return result.count;
+    });
+  }
+
+  async updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.TeacherWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.teacher.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more teachers were not found');
+      }
+      const result = await tx.teacher.updateMany({
+        where,
+        data: { isActive },
+      });
+      return result.count;
+    });
   }
 
   private toView(teacher: Prisma.TeacherGetPayload<{ include: typeof teacherInclude }>): TeacherView {

@@ -23,5 +23,7 @@ export interface BatchRepository {
   findMany(query: PaginationQueryDto, organizationId?: string): Promise<PaginatedResult<BatchView>>;
   findById(id: string): Promise<BatchView | null>;
   update(id: string, payload: UpdateBatchDto, organizationId?: string): Promise<BatchView>;
-  delete(id: string): Promise<void>;
+  delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
+  updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number>;
 }

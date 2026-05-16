@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { FeePlan, FeeRecord, Prisma } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -92,5 +92,20 @@ export class FeePrismaRepository implements FeeRepository {
     }
 
     await this.prisma.feeRecord.delete({ where: { id } });
+  }
+
+  async deleteManyRecords(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.feeRecord.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more fee records were not found');
+      }
+      const result = await tx.feeRecord.deleteMany({ where });
+      return result.count;
+    });
   }
 }

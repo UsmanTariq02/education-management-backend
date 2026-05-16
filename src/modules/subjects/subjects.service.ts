@@ -85,4 +85,39 @@ export class SubjectsService {
       metadata: { deleted: true },
     });
   }
+
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.subjectRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'subjects',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async bulkUpdateStatus(
+    ids: string[],
+    isActive: boolean,
+    actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const updatedCount = await this.subjectRepository.updateManyStatus(
+      uniqueIds,
+      isActive,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'subjects',
+      action: 'bulk-status',
+      metadata: { ids: uniqueIds, isActive, updatedCount },
+    });
+    return { updatedCount };
+  }
 }

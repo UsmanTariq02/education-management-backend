@@ -1,16 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Organization, Prisma } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
+import { decryptSecret, encryptSecret } from '../../../common/utils/secret.util';
+import { ConfigService } from '@nestjs/config';
 import { buildPagination } from '../../../common/utils/pagination.util';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateOrganizationDto } from '../dto/create-organization.dto';
 import { UpdateOrganizationDto } from '../dto/update-organization.dto';
 import { OrganizationRepository, OrganizationSummary } from '../interfaces/organization.repository.interface';
+import { isTrialAiAccessible } from '../../../common/utils/ai-access.util';
 
 @Injectable()
 export class OrganizationPrismaRepository implements OrganizationRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
 
   async findMany(query: PaginationQueryDto): Promise<PaginatedResult<OrganizationSummary>> {
     const where: Prisma.OrganizationWhereInput = query.search
@@ -45,6 +51,7 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
   async create(payload: CreateOrganizationDto): Promise<OrganizationSummary> {
     const {
       enabledModules,
+      openAiApiKey,
       subscriptionStatus: _subscriptionStatus,
       trialDays: _trialDays,
       trialStartsAt: _trialStartsAt,
@@ -52,12 +59,20 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
       subscriptionStartsAt: _subscriptionStartsAt,
       subscriptionEndsAt: _subscriptionEndsAt,
       subscriptionNotes: _subscriptionNotes,
+      aiDraftApprovalRequired: _aiDraftApprovalRequired,
       ...rest
     } = payload;
     const billingData = this.resolveBillingFields(payload);
+    const encryptedAiKey = this.encryptOpenAiKey(openAiApiKey);
     const data: Prisma.OrganizationUncheckedCreateInput = {
       ...rest,
       ...billingData,
+      ...(encryptedAiKey
+        ? {
+            openAiApiKeyEncrypted: encryptedAiKey,
+            openAiApiKeyUpdatedAt: new Date(),
+          }
+        : {}),
       enabledModules: enabledModules as unknown as Prisma.OrganizationUncheckedCreateInput['enabledModules'],
     };
     const organization = await this.prisma.organization.create({
@@ -70,6 +85,7 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
     const existing = await this.prisma.organization.findUniqueOrThrow({ where: { id } });
     const {
       enabledModules,
+      openAiApiKey,
       subscriptionStatus: _subscriptionStatus,
       trialDays: _trialDays,
       trialStartsAt: _trialStartsAt,
@@ -80,9 +96,16 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
       ...rest
     } = payload;
     const billingData = this.resolveBillingFields(payload, existing);
+    const encryptedAiKey = this.encryptOpenAiKey(openAiApiKey);
     const data: Prisma.OrganizationUncheckedUpdateInput = {
       ...rest,
       ...billingData,
+      ...(openAiApiKey !== undefined
+        ? {
+            openAiApiKeyEncrypted: encryptedAiKey,
+            openAiApiKeyUpdatedAt: encryptedAiKey ? new Date() : null,
+          }
+        : {}),
       ...(enabledModules
         ? {
             enabledModules: enabledModules as unknown as Prisma.OrganizationUncheckedUpdateInput['enabledModules'],
@@ -142,7 +165,7 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
     ]);
 
     return {
-      ...organization,
+      ...this.sanitizeOrganization(organization),
       totalUsers,
       totalAdmins,
       totalStaff,
@@ -152,6 +175,8 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
       totalFeeRecords,
       totalAttendanceRecords,
       totalReminderLogs,
+      hasOpenAiApiKey: Boolean((organization as Organization & { openAiApiKeyEncrypted?: string | null }).openAiApiKeyEncrypted),
+      hasTrialAiAccess: isTrialAiAccessible(organization.subscriptionStatus, organization.trialEndsAt),
     };
   }
 
@@ -192,5 +217,34 @@ export class OrganizationPrismaRepository implements OrganizationRepository {
     const nextDate = new Date(date);
     nextDate.setDate(nextDate.getDate() + days);
     return nextDate;
+  }
+
+  private sanitizeOrganization<T extends Organization>(organization: T) {
+    const { openAiApiKeyEncrypted: _openAiApiKeyEncrypted, ...rest } = organization as T & {
+      openAiApiKeyEncrypted?: string | null;
+    };
+    return {
+      ...rest,
+      hasOpenAiApiKey: Boolean(_openAiApiKeyEncrypted),
+      hasTrialAiAccess: isTrialAiAccessible(rest.subscriptionStatus, rest.trialEndsAt),
+    };
+  }
+
+  private encryptOpenAiKey(openAiApiKey?: string) {
+    if (openAiApiKey === undefined) {
+      return undefined;
+    }
+
+    const trimmed = openAiApiKey.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const secret = this.configService.get<string>('security.organizationSecretKey', { infer: true });
+    if (!secret) {
+      throw new BadRequestException('Organization secret key is not configured');
+    }
+
+    return encryptSecret(trimmed, secret);
   }
 }

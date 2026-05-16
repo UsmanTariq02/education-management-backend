@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import { BulkDeleteDto } from '../../common/dto/bulk-delete.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
@@ -63,5 +64,12 @@ export class AssignmentsController {
   async delete(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext): Promise<{ deleted: boolean }> {
     await this.assignmentsService.delete(id, actor);
     return { deleted: true };
+  }
+
+  @Post('bulk-delete')
+  @Permissions('assignments.delete')
+  @ApiOperation({ summary: 'Bulk delete assignments' })
+  async bulkDelete(@Body() payload: BulkDeleteDto, @CurrentUser() actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    return this.assignmentsService.bulkDelete(payload.ids, actor);
   }
 }

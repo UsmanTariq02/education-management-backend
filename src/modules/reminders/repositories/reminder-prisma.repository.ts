@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   ReminderAutomationTrigger,
   ReminderLog,
@@ -196,6 +196,19 @@ export class ReminderPrismaRepository implements ReminderRepository {
     }
 
     await this.prisma.reminderLog.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    const where: Prisma.ReminderLogWhereInput = {
+      id: { in: ids },
+      ...(organizationId ? { organizationId } : {}),
+    };
+    const count = await this.prisma.reminderLog.count({ where });
+    if (count !== ids.length) {
+      throw new NotFoundException('One or more reminder logs were not found');
+    }
+    const result = await this.prisma.reminderLog.deleteMany({ where });
+    return result.count;
   }
 
   async getDeliveryContext(studentId: string, organizationId?: string): Promise<ReminderDeliveryContext | null> {

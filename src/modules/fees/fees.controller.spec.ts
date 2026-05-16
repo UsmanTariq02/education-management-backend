@@ -21,6 +21,7 @@ describe('FeesController', () => {
             listRecords: jest.fn(),
             updateRecord: jest.fn(),
             deleteRecord: jest.fn(),
+            processFeeEscalations: jest.fn(),
           },
         },
       ],

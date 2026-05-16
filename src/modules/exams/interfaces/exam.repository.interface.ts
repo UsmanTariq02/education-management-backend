@@ -39,4 +39,6 @@ export interface ExamRepository {
   findById(id: string): Promise<ExamView | null>;
   update(id: string, payload: UpdateExamDto, organizationId?: string): Promise<ExamView>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
+  updateManyPublished(ids: string[], isPublished: boolean, organizationId?: string): Promise<number>;
 }

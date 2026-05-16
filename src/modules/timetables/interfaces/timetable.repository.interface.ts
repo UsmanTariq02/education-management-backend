@@ -44,4 +44,5 @@ export interface TimetableRepository {
   findById(id: string): Promise<TimetableEntryView | null>;
   update(id: string, payload: UpdateTimetableEntryDto, organizationId?: string): Promise<TimetableEntryView>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
 }

@@ -73,7 +73,10 @@ export class BatchesService {
   }
 
   async delete(id: string, actor: CurrentUserContext): Promise<void> {
-    await this.batchRepository.delete(id);
+    await this.batchRepository.delete(
+      id,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
     await this.auditLogService.log({
       actorUserId: actor.userId,
       module: 'batches',
@@ -81,5 +84,40 @@ export class BatchesService {
       targetId: id,
       metadata: { deleted: true },
     });
+  }
+
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.batchRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'batches',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async bulkUpdateStatus(
+    ids: string[],
+    isActive: boolean,
+    actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const updatedCount = await this.batchRepository.updateManyStatus(
+      uniqueIds,
+      isActive,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'batches',
+      action: 'bulk-status',
+      metadata: { ids: uniqueIds, isActive, updatedCount },
+    });
+    return { updatedCount };
   }
 }

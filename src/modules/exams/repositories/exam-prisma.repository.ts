@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -127,6 +127,40 @@ export class ExamPrismaRepository implements ExamRepository {
       await this.prisma.exam.findFirstOrThrow({ where: { id, organizationId }, select: { id: true } });
     }
     await this.prisma.exam.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.ExamWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.exam.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more exams were not found');
+      }
+      await tx.examSubject.deleteMany({ where: { examId: { in: ids } } });
+      const result = await tx.exam.deleteMany({ where });
+      return result.count;
+    });
+  }
+
+  async updateManyPublished(ids: string[], isPublished: boolean, organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.ExamWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.exam.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more exams were not found');
+      }
+      const result = await tx.exam.updateMany({
+        where,
+        data: { isPublished },
+      });
+      return result.count;
+    });
   }
 
   private toView(exam: Prisma.ExamGetPayload<{ include: typeof examInclude }>): ExamView {

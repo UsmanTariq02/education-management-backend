@@ -38,7 +38,9 @@ import { OrganizationsModule } from './modules/organizations/organizations.modul
 import { ActivityLogsModule } from './modules/activity-logs/activity-logs.module';
 import { InquiriesModule } from './modules/inquiries/inquiries.module';
 import { PortalModule } from './modules/portal/portal.module';
+import { MailModule } from './modules/mail/mail.module';
 import { OnlineClassesModule } from './modules/online-classes/online-classes.module';
+import { AiModule } from './modules/ai/ai.module';
 
 @Module({
   imports: [
@@ -83,7 +85,9 @@ import { OnlineClassesModule } from './modules/online-classes/online-classes.mod
     ActivityLogsModule,
     InquiriesModule,
     PortalModule,
+    MailModule,
     OnlineClassesModule,
+    AiModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -5,6 +5,8 @@ export interface PortalAuthenticatedUser {
   studentId: string;
   organizationId: string;
   organizationName: string;
+  hasOpenAiApiKey: boolean;
+  hasTrialAiAccess: boolean;
   email: string;
   accountType: PortalAccountType;
   studentName: string;

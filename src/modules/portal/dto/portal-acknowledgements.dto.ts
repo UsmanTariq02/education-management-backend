@@ -1,6 +1,6 @@
 export interface PortalAcknowledgementItemDto {
   itemKey: string;
-  kind: 'FEE_DUE' | 'ASSIGNMENT_FEEDBACK' | 'ASSESSMENT_RESULT' | 'EXAM_RESULT';
+  kind: 'FEE_DUE' | 'ASSIGNMENT_FEEDBACK' | 'ASSESSMENT_RESULT' | 'EXAM_RESULT' | 'ANNOUNCEMENT';
   title: string;
   description: string;
   occurredAt: Date;

@@ -5,8 +5,12 @@ export interface AuthenticatedUser {
   email: string;
   organizationId: string | null;
   organizationName: string | null;
+  subscriptionStatus: string | null;
+  trialEndsAt: string | null;
   userLimit: number | null;
   studentLimit: number | null;
+  hasOpenAiApiKey: boolean;
+  hasTrialAiAccess: boolean;
   enabledModules: OrganizationModule[];
   firstName: string;
   lastName: string;

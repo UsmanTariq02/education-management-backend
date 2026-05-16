@@ -24,4 +24,6 @@ export interface AcademicSessionRepository {
   findById(id: string): Promise<AcademicSessionView | null>;
   update(id: string, payload: UpdateAcademicSessionDto, organizationId?: string): Promise<AcademicSessionView>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
+  updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number>;
 }

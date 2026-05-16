@@ -3,6 +3,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ModuleAccess } from '../../common/decorators/module-access.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import { BulkDeleteDto } from '../../common/dto/bulk-delete.dto';
+import { BulkAssessmentStatusDto } from '../../common/dto/bulk-assessment-status.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { OrganizationModule } from '../../common/enums/organization-module.enum';
 import { CurrentUserContext } from '../../common/interfaces/current-user.interface';
@@ -77,5 +79,22 @@ export class AssessmentsController {
   async delete(@Param('id') id: string, @CurrentUser() actor: CurrentUserContext): Promise<{ deleted: boolean }> {
     await this.assessmentsService.delete(id, actor);
     return { deleted: true };
+  }
+
+  @Post('bulk-delete')
+  @Permissions('assessments.delete')
+  @ApiOperation({ summary: 'Delete assessments in bulk' })
+  async bulkDelete(@Body() payload: BulkDeleteDto, @CurrentUser() actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    return this.assessmentsService.bulkDelete(payload.ids, actor);
+  }
+
+  @Post('bulk-status')
+  @Permissions('assessments.update')
+  @ApiOperation({ summary: 'Update assessments in bulk' })
+  async bulkStatus(
+    @Body() payload: BulkAssessmentStatusDto,
+    @CurrentUser() actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    return this.assessmentsService.bulkUpdateStatus(payload.ids, payload.status, actor);
   }
 }

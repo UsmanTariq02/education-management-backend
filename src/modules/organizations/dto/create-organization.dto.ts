@@ -68,6 +68,11 @@ export class CreateOrganizationDto {
   @IsOptional()
   subscriptionNotes?: string;
 
+  @ApiPropertyOptional({ default: false })
+  @IsBoolean()
+  @IsOptional()
+  aiDraftApprovalRequired = false;
+
   @ApiPropertyOptional({ default: 10 })
   @IsInt()
   @Min(1)
@@ -79,6 +84,13 @@ export class CreateOrganizationDto {
   @Min(1)
   @IsOptional()
   studentLimit = 500;
+
+  @ApiPropertyOptional({
+    description: 'Encrypted OpenAI API key used for tenant-scoped AI automation',
+  })
+  @IsString()
+  @IsOptional()
+  openAiApiKey?: string;
 
   @ApiPropertyOptional({ enum: OrganizationModule, isArray: true })
   @IsArray()

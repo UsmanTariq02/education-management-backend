@@ -8,6 +8,7 @@ import { AuditLogService } from '../../common/services/audit-log.service';
 import { OrganizationAccessService } from '../../common/services/organization-access.service';
 import { PasswordUtil } from '../../common/utils/password.util';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PortalAuthService } from '../portal-auth/portal-auth.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { UpsertPortalAccessDto } from './dto/upsert-portal-access.dto';
@@ -23,6 +24,7 @@ export class StudentsService {
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
     private readonly organizationAccessService: OrganizationAccessService,
+    private readonly portalAuthService: PortalAuthService,
   ) {}
 
   async create(payload: CreateStudentDto, actor: CurrentUserContext) {
@@ -133,6 +135,14 @@ export class StudentsService {
     };
   }
 
+  async openStudentPortal(id: string, actor: CurrentUserContext) {
+    return this.portalAuthService.impersonateStudent(id, actor);
+  }
+
+  async openParentPortal(id: string, actor: CurrentUserContext) {
+    return this.portalAuthService.impersonateParent(id, actor);
+  }
+
   async upsertPortalAccess(id: string, payload: UpsertPortalAccessDto, actor: CurrentUserContext) {
     const student = await this.findOne(id, actor);
 
@@ -162,7 +172,10 @@ export class StudentsService {
   }
 
   async delete(id: string, actor: CurrentUserContext): Promise<void> {
-    await this.studentRepository.delete(id);
+    await this.studentRepository.delete(
+      id,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
     await this.auditLogService.log({
       actorUserId: actor.userId,
       module: 'students',
@@ -170,6 +183,41 @@ export class StudentsService {
       targetId: id,
       metadata: { deleted: true },
     });
+  }
+
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.studentRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'students',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async bulkUpdateStatus(
+    ids: string[],
+    status: string,
+    actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const updatedCount = await this.studentRepository.updateManyStatus(
+      uniqueIds,
+      status,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'students',
+      action: 'bulk-status',
+      metadata: { ids: uniqueIds, status, updatedCount },
+    });
+    return { updatedCount };
   }
 
   async downloadImportSample(): Promise<string> {

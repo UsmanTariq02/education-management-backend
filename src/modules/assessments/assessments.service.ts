@@ -90,6 +90,41 @@ export class AssessmentsService {
     });
   }
 
+  async bulkDelete(ids: string[], actor: CurrentUserContext): Promise<{ deletedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedCount = await this.assessmentRepository.deleteMany(
+      uniqueIds,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'assessments',
+      action: 'bulk-delete',
+      metadata: { ids: uniqueIds, deletedCount },
+    });
+    return { deletedCount };
+  }
+
+  async bulkUpdateStatus(
+    ids: string[],
+    status: 'DRAFT' | 'PUBLISHED' | 'CLOSED',
+    actor: CurrentUserContext,
+  ): Promise<{ updatedCount: number }> {
+    const uniqueIds = Array.from(new Set(ids));
+    const updatedCount = await this.assessmentRepository.updateManyStatus(
+      uniqueIds,
+      status,
+      actor.roles.includes('SUPER_ADMIN') ? undefined : (actor.organizationId ?? undefined),
+    );
+    await this.auditLogService.log({
+      actorUserId: actor.userId,
+      module: 'assessments',
+      action: 'bulk-status',
+      metadata: { ids: uniqueIds, status, updatedCount },
+    });
+    return { updatedCount };
+  }
+
   async findReviewQueue(id: string, actor: CurrentUserContext) {
     const reviewQueue = await this.assessmentRepository.findReviewQueue(
       id,

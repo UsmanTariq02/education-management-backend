@@ -27,4 +27,6 @@ export interface TeacherRepository {
   findById(id: string): Promise<TeacherView | null>;
   update(id: string, payload: UpdateTeacherDto, organizationId?: string): Promise<TeacherView>;
   delete(id: string, organizationId?: string): Promise<void>;
+  deleteMany(ids: string[], organizationId?: string): Promise<number>;
+  updateManyStatus(ids: string[], isActive: boolean, organizationId?: string): Promise<number>;
 }

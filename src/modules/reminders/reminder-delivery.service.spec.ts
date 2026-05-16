@@ -4,6 +4,7 @@ import {
   EMAIL_REMINDER_PROVIDER,
   WHATSAPP_REMINDER_PROVIDER,
 } from '../../common/constants/injection-tokens';
+import { FileLogService } from '../../common/services/file-log.service';
 import { ReminderDeliveryService } from './reminder-delivery.service';
 import { ReminderDeliveryProvider } from './interfaces/reminder-delivery-provider.interface';
 
@@ -23,6 +24,13 @@ describe('ReminderDeliveryService', () => {
         {
           provide: WHATSAPP_REMINDER_PROVIDER,
           useValue: { send: jest.fn() },
+        },
+        {
+          provide: FileLogService,
+          useValue: {
+            appendLog: jest.fn(),
+            logError: jest.fn(),
+          },
         },
       ],
     }).compile();

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Attendance, Prisma } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 import { PaginatedResult } from '../../../common/interfaces/paginated-result.interface';
@@ -14,6 +14,16 @@ export class AttendancePrismaRepository implements AttendanceRepository {
 
   async create(payload: CreateAttendanceDto, organizationId: string): Promise<Attendance> {
     return this.prisma.attendance.create({ data: { ...payload, organizationId } });
+  }
+
+  async createMany(payloads: CreateAttendanceDto[], organizationId: string): Promise<Attendance[]> {
+    return this.prisma.$transaction(
+      payloads.map((payload) =>
+        this.prisma.attendance.create({
+          data: { ...payload, organizationId },
+        }),
+      ),
+    );
   }
 
   async findMany(query: PaginationQueryDto, organizationId?: string): Promise<PaginatedResult<Attendance>> {
@@ -45,6 +55,24 @@ export class AttendancePrismaRepository implements AttendanceRepository {
     });
   }
 
+  async updateManyStatus(ids: string[], status: Attendance['status'], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.AttendanceWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.attendance.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more attendance records were not found');
+      }
+      const result = await tx.attendance.updateMany({
+        where,
+        data: { status },
+      });
+      return result.count;
+    });
+  }
+
   async delete(id: string, organizationId?: string): Promise<void> {
     if (organizationId) {
       await this.prisma.attendance.findFirstOrThrow({
@@ -54,5 +82,20 @@ export class AttendancePrismaRepository implements AttendanceRepository {
     }
 
     await this.prisma.attendance.delete({ where: { id } });
+  }
+
+  async deleteMany(ids: string[], organizationId?: string): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const where: Prisma.AttendanceWhereInput = {
+        id: { in: ids },
+        ...(organizationId ? { organizationId } : {}),
+      };
+      const count = await tx.attendance.count({ where });
+      if (count !== ids.length) {
+        throw new NotFoundException('One or more attendance records were not found');
+      }
+      const result = await tx.attendance.deleteMany({ where });
+      return result.count;
+    });
   }
 }

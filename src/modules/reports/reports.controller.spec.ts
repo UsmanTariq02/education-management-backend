@@ -42,6 +42,7 @@ describe('ReportsController', () => {
             getReminderChannelSummary: jest.fn(),
             getReminderStatusBreakdown: jest.fn(),
             getReminderDailyTrend: jest.fn(),
+            getWeeklyPrincipalSummary: jest.fn(),
           },
         },
       ],
@@ -63,6 +64,23 @@ describe('ReportsController', () => {
 
     await expect(controller.summary(actor)).resolves.toEqual(expected);
     expect(service.getDashboardSummary).toHaveBeenCalledWith(actor);
+  });
+
+  it('weeklyPrincipalSummary should delegate to service', async () => {
+    const expected = {
+      organizationId: 'org-1',
+      organizationName: 'Default Academy',
+      generatedAt: new Date().toISOString(),
+      headline: 'Fee recovery needs immediate attention',
+      overview: 'Test overview',
+      highlights: ['one'],
+      risks: ['two'],
+      nextActions: ['three'],
+    };
+    service.getWeeklyPrincipalSummary.mockResolvedValue(expected as never);
+
+    await expect(controller.weeklyPrincipalSummary(actor)).resolves.toEqual(expected);
+    expect(service.getWeeklyPrincipalSummary).toHaveBeenCalledWith(actor);
   });
 
   it('totalStudents should delegate to service', async () => {

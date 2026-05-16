@@ -1,0 +1,9 @@
+export enum AiPromptPreset {
+  STANDARD = 'STANDARD',
+  CONCISE = 'CONCISE',
+  FRIENDLY = 'FRIENDLY',
+  FORMAL = 'FORMAL',
+  PARENT = 'PARENT',
+  STAFF = 'STAFF',
+  FINANCE = 'FINANCE',
+}
